@@ -2,7 +2,7 @@
   "name": "中職票房分析",
   "short_name": "CPBL 分析",
   "description": "中華職棒觀眾人數與天氣數據分析儀表板",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1d4ed8",
