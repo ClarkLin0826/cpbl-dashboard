@@ -7,7 +7,8 @@ import {
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { generateMockData, GameData } from './mockData';
@@ -20,7 +21,8 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 type ViewMode = 'homeTeam' | 'stadium';
@@ -37,6 +39,7 @@ export default function App() {
   const [selectedYear, setSelectedYear] = useState<string>('All');
   const [selectedStadiumFilter, setSelectedStadiumFilter] = useState<string>('All');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<string>('All');
+  const [selectedThemeFilter, setSelectedThemeFilter] = useState<string>('All');
   const [sortMode, setSortMode] = useState<SortMode>('date');
   const [showSettings, setShowSettings] = useState(false);
 
@@ -45,6 +48,7 @@ export default function App() {
     setSelectedYear('All');
     setSelectedStadiumFilter('All');
     setSelectedDayOfWeek('All');
+    setSelectedThemeFilter('All');
     setSelectedOption(''); // Reset selected option to trigger auto-select
   }, [viewMode]);
 
@@ -80,6 +84,7 @@ export default function App() {
             Audience: Number(item.Audience) || 0,
             'MaxTemp(C)': Number(item['MaxTemp(C)']) || 0,
             'Rainfall(mm)': Number(item['Rainfall(mm)']) || 0,
+            Theme: item.Theme || '',
           }));
           
           setRawData(processedData);
@@ -155,6 +160,11 @@ export default function App() {
       const matchDay = selectedDayOfWeek === 'All' || dayStr === selectedDayOfWeek;
       if (!matchDay) return false;
 
+      const matchTheme = selectedThemeFilter === 'All' ? true :
+                         selectedThemeFilter === 'ThemeOnly' ? !!game.Theme :
+                         !game.Theme;
+      if (!matchTheme) return false;
+
       return true;
     });
 
@@ -173,7 +183,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, sortMode, selectedYear, selectedStadiumFilter, selectedDayOfWeek]);
+  }, [rawData, viewMode, selectedOption, sortMode, selectedYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter]);
 
   const maxTemp = chartData.length > 0 ? Math.max(...chartData.map(d => d['MaxTemp(C)'])) : null;
   const maxRain = chartData.length > 0 ? Math.max(...chartData.map(d => d['Rainfall(mm)'])) : null;
@@ -181,19 +191,26 @@ export default function App() {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
     plugins: {
       legend: {
         display: false,
       },
       tooltip: {
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        titleColor: '#1f2937',
+        titleColor: '#111827',
         bodyColor: '#4b5563',
         borderColor: '#e5e7eb',
         borderWidth: 1,
-        padding: 12,
-        boxPadding: 6,
+        padding: 16,
+        boxPadding: 8,
         usePointStyle: true,
+        cornerRadius: 8,
+        titleFont: { size: 14, weight: 'bold' as const, family: 'Inter, sans-serif' },
+        bodyFont: { size: 13, family: 'Inter, sans-serif' },
         callbacks: {
           title: function(context: any) {
             return context[0].label;
@@ -212,7 +229,7 @@ export default function App() {
             const dateObj = new Date(data.Date);
             const dayStr = dayOfWeekMap[dateObj.getDay()];
 
-            return [
+            const tooltipLines = [
               `日期：${data.Date} (${dayStr})`,
               `場次：${data.GameSno}`,
               `人數：${data.Audience.toLocaleString()}`,
@@ -221,6 +238,12 @@ export default function App() {
               tempLabel,
               rainLabel
             ];
+
+            if (data.Theme) {
+              tooltipLines.splice(2, 0, `主題日：${data.Theme} ⭐`);
+            }
+
+            return tooltipLines;
           }
         }
       }
@@ -229,18 +252,26 @@ export default function App() {
       x: {
         grid: {
           display: false,
+          drawBorder: false,
         },
+        border: { display: false },
         ticks: {
           maxRotation: 45,
           minRotation: 45,
+          color: '#6b7280',
+          font: { family: 'Inter, sans-serif' }
         }
       },
       y: {
         beginAtZero: true,
+        border: { display: false },
         grid: {
           color: '#f3f4f6',
+          borderDash: [5, 5],
         },
         ticks: {
+          color: '#6b7280',
+          font: { family: 'Inter, sans-serif' },
           callback: function(value: any) {
             return value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value;
           }
@@ -255,13 +286,22 @@ export default function App() {
     if (isMaxTemp && isMaxRain) return '#a855f7'; // purple
     if (isMaxTemp) return '#ef4444'; // red
     if (isMaxRain) return '#06b6d4'; // cyan
-    return '#1d4ed8'; // default blue
+    if (d.Theme) return '#f59e0b'; // amber for theme
+    return '#3b82f6'; // default blue
   });
+
+  const pointBorderColors = chartData.map(d => {
+    if (d.Theme) return '#fef3c7'; // light amber border for theme
+    return '#ffffff'; // white border for others
+  });
+
+  const pointBorderWidths = chartData.map(d => d.Theme ? 3 : 2);
 
   const pointRadii = chartData.map(d => {
     const isMaxTemp = maxTemp !== null && d['MaxTemp(C)'] === maxTemp && maxTemp > 0;
     const isMaxRain = maxRain !== null && d['Rainfall(mm)'] === maxRain && maxRain > 0;
-    return (isMaxTemp || isMaxRain) ? 8 : 4;
+    if (d.Theme) return 8;
+    return (isMaxTemp || isMaxRain) ? 6 : 4;
   });
 
   const chartJsData = {
@@ -270,14 +310,23 @@ export default function App() {
       {
         label: '觀眾人數',
         data: chartData.map(d => d.Audience),
-        borderColor: '#1d4ed8',
-        backgroundColor: pointBackgroundColors,
-        tension: 0.1,
+        borderColor: '#3b82f6',
+        backgroundColor: (context: any) => {
+          const ctx = context.chart.ctx;
+          const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+          gradient.addColorStop(0, 'rgba(59, 130, 246, 0.2)');
+          gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+          return gradient;
+        },
+        fill: true,
+        tension: 0.4,
+        pointStyle: 'circle',
         pointRadius: pointRadii,
         pointHoverRadius: pointRadii.map(r => r + 2),
         pointBackgroundColor: pointBackgroundColors,
-        pointBorderColor: pointBackgroundColors,
-        borderWidth: 2,
+        pointBorderColor: pointBorderColors,
+        borderWidth: 3,
+        pointBorderWidth: pointBorderWidths,
       }
     ]
   };
@@ -336,7 +385,7 @@ export default function App() {
         ) : (
           <>
             {/* Controls */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="space-y-1">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">分析維度</label>
             <select
@@ -411,6 +460,19 @@ export default function App() {
               <option value="星期日">星期日</option>
             </select>
           </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">主題日篩選</label>
+            <select
+              value={selectedThemeFilter}
+              onChange={(e) => setSelectedThemeFilter(e.target.value)}
+              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="All">全部場次</option>
+              <option value="ThemeOnly">僅看主題日 ⭐</option>
+              <option value="NormalOnly">僅看一般例行賽</option>
+            </select>
+          </div>
         </div>
 
         {/* Sorting */}
@@ -467,10 +529,11 @@ export default function App() {
           ) : (
             <div className="flex flex-col flex-1 w-full">
               <div className="flex flex-wrap items-center gap-4 mb-4 text-xs text-gray-600">
-                <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-[#1d4ed8] mr-1.5"></span>一般場次</div>
-                <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-[#ef4444] mr-1.5"></span>最高氣溫</div>
-                <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-[#06b6d4] mr-1.5"></span>最高降雨量</div>
-                <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-[#a855f7] mr-1.5"></span>最高溫且最高降雨</div>
+                <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-[#3b82f6] border-2 border-white mr-1.5 shadow-sm"></span>一般場次</div>
+                <div className="flex items-center"><span className="w-4 h-4 rounded-full bg-[#f59e0b] border-[3px] border-[#fef3c7] mr-1.5 shadow-sm"></span>主題日</div>
+                <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#ef4444] border-2 border-white mr-1.5 shadow-sm"></span>最高氣溫</div>
+                <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#06b6d4] border-2 border-white mr-1.5 shadow-sm"></span>最高降雨量</div>
+                <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#a855f7] border-2 border-white mr-1.5 shadow-sm"></span>最高溫且最高降雨</div>
               </div>
               <div className="w-full overflow-x-auto pb-4">
                 <div className="relative min-h-[400px]" style={{ width: Math.max(800, chartData.length * 30) + 'px' }}>

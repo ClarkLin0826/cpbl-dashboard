@@ -7,6 +7,7 @@ export interface GameData {
   Audience: number;
   "MaxTemp(C)": number;
   "Rainfall(mm)": number;
+  Theme?: string;
 }
 
 export const generateMockData = (): Record<string, GameData[]> => {
@@ -26,15 +27,19 @@ export const generateMockData = (): Record<string, GameData[]> => {
       
       const date = new Date(2024, 3, i + Math.floor(Math.random() * 150));
       
+      const mockThemes = ["女孩日", "動漫祭", "鄉民大會", "復古日", "寵物日"];
+      const hasTheme = Math.random() > 0.8;
+      
       teamData.push({
         GameSno: `G${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
         Date: date.toISOString().split('T')[0],
         Stadium: stadiums[Math.floor(Math.random() * stadiums.length)],
         AwayTeam: awayTeam,
         HomeTeam: homeTeam,
-        Audience: Math.floor(Math.random() * 15000) + 3000,
+        Audience: Math.floor(Math.random() * 15000) + 3000 + (hasTheme ? 5000 : 0), // 主題日人數較多
         "MaxTemp(C)": Math.floor(Math.random() * 15) + 20,
         "Rainfall(mm)": Math.random() > 0.7 ? Math.floor(Math.random() * 50) : 0,
+        Theme: hasTheme ? mockThemes[Math.floor(Math.random() * mockThemes.length)] : "",
       });
     }
     // Sort by date
