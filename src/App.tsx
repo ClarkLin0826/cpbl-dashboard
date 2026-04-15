@@ -438,13 +438,15 @@ export default function App() {
           <BarChart2 className="w-6 h-6" />
           <h1 className="text-xl font-bold">中職票房分析</h1>
         </div>
-        <button 
-          onClick={() => setShowSettings(!showSettings)}
-          className="p-2 hover:bg-blue-600 rounded-full transition-colors"
-          aria-label="設定"
-        >
-          <Settings className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setShowSettings(!showSettings)}
+            className="p-2 hover:bg-blue-600 rounded-full transition-colors"
+            aria-label="設定"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       {/* Settings Panel */}
