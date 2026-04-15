@@ -82,15 +82,27 @@ export default function App() {
           
           // Extract IG mapping if the sheet exists
           const newIgMapping: Record<string, string> = {};
-          const igSheetKey = Object.keys(data).find(k => k.toLowerCase() === 'cheerleadersig' || k === '啦啦隊ig');
+          const igSheetKey = Object.keys(data).find(k => {
+            const normalized = k.replace(/\s/g, '').toLowerCase();
+            return normalized.includes('啦啦隊ig') || normalized.includes('cheerleadersig') || normalized === 'ig';
+          });
+          
           if (igSheetKey) {
             // GAS might return an array of objects or an object of objects depending on how it's parsed
             const igData = Array.isArray(data[igSheetKey]) ? data[igSheetKey] : Object.values(data[igSheetKey]);
             igData.forEach((row: any) => {
-              if (!row) return;
+              if (!row || typeof row !== 'object') return;
+              
+              // Normalize keys to handle spaces or different cases
+              const normalizedRow: Record<string, any> = {};
+              Object.keys(row).forEach(key => {
+                normalizedRow[key.replace(/\s/g, '').toLowerCase()] = row[key];
+              });
+
               // Check various possible column names for Name and IG
-              const name = row['名字'] || row['Name'] || row['姓名'] || row['啦啦隊'] || row['name'];
-              const ig = row['IG'] || row['連結'] || row['URL'] || row['IG連結'] || row['ig'];
+              const name = normalizedRow['名字'] || normalizedRow['name'] || normalizedRow['姓名'] || normalizedRow['啦啦隊'];
+              const ig = normalizedRow['ig'] || normalizedRow['連結'] || normalizedRow['url'] || normalizedRow['ig連結'];
+              
               if (name && ig) {
                 newIgMapping[name.toString().trim()] = ig.toString().trim();
               }
@@ -110,9 +122,9 @@ export default function App() {
             'MaxTemp(C)': Number(item['MaxTemp(C)']) || 0,
             'Rainfall(mm)': Number(item['Rainfall(mm)']) || 0,
             'RainProb(%)': item['RainProb(%)'] !== undefined && item['RainProb(%)'] !== '' ? Number(item['RainProb(%)']) : undefined,
-            Theme: item.Theme || '',
-            Url: item.Url || item.URL || '', // Map URL from column G
-            Cheerleaders: item.Cheerleaders || '',
+            Theme: item.Theme || item['主題日'] || '',
+            Url: item.Url || item.URL || item['連結'] || '', // Map URL from column G
+            Cheerleaders: item.Cheerleaders || item['啦啦隊'] || item['啦啦隊班表'] || '',
           }));
           
           setRawData(processedData);
@@ -712,7 +724,7 @@ export default function App() {
                   <div className="col-span-2 flex flex-col gap-2 border-b pb-3">
                     <span className="text-gray-500">啦啦隊班表</span>
                     <div className="flex flex-wrap gap-2">
-                      {selectedGame.Cheerleaders.split(/[,、]/).map(c => c.trim()).filter(Boolean).map((name, idx) => {
+                      {selectedGame.Cheerleaders.split(/[,、，]/).map(c => c.trim()).filter(Boolean).map((name, idx) => {
                         const igUrl = igMapping[name];
                         if (igUrl) {
                           return (
