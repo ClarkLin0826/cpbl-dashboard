@@ -114,8 +114,14 @@ export default function App() {
           setIgMapping(newIgMapping);
 
           const flatData = Object.values(data).flat() as GameData[];
-          // Use Date + GameSno to prevent 2024 and 2025 games from overwriting each other
-          const uniqueData = Array.from(new Map(flatData.map(item => [`${item.Date}-${item.GameSno}`, item])).values());
+          // Use Date + GameSno + HomeTeam to prevent games from overwriting each other
+          // Sometimes GameSno resets or overlaps across different sheets/years
+          const uniqueData = Array.from(new Map(flatData.map(item => {
+            // Create a truly unique key for each game
+            const year = item.Date ? item.Date.split('/')[0] : '';
+            const key = `${year}-${item.GameSno}-${item.HomeTeam}`;
+            return [key, item];
+          })).values());
           
           // Ensure numeric values
           const processedData = uniqueData.map(item => ({
