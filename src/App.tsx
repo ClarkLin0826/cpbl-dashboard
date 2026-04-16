@@ -508,6 +508,15 @@ export default function App() {
     ? Array.from(winRatesByYear.values()).reduce((a, b) => a + b, 0) / winRatesByYear.size 
     : null;
 
+  // Dynamic tension to prevent Bezier curve loops/overshoots when data points are too dense
+  const getCurveTension = (dataLength: number) => {
+    if (dataLength > 200) return 0.1;
+    if (dataLength > 100) return 0.2;
+    if (dataLength > 50) return 0.3;
+    return 0.4;
+  };
+  const dynamicTension = getCurveTension(chartData.length);
+
   const chartJsData = {
     labels: chartData.map((d, i, arr) => {
       const sameDateGames = arr.filter(game => game.Date === d.Date);
@@ -533,7 +542,7 @@ export default function App() {
           return gradient;
         },
         fill: true,
-        tension: 0.4,
+        tension: dynamicTension,
         pointStyle: 'circle',
         pointRadius: pointRadii,
         pointHoverRadius: pointRadii.map(r => r + 2),
