@@ -905,8 +905,8 @@ export default function App() {
                 <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#06b6d4] border-2 border-white mr-1.5 shadow-sm"></span>最高降雨量</div>
                 <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#a855f7] border-2 border-white mr-1.5 shadow-sm"></span>最高溫且最高降雨</div>
               </div>
-              <div className="w-full overflow-x-auto pb-4">
-                <div className="relative min-h-[400px]" style={{ width: Math.min(30000, Math.max(800, chartData.length * 30)) + 'px' }}>
+              <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
+                <div className="relative h-[300px] md:h-[400px]" style={{ width: Math.max(100, chartData.length * 20) > document.body.clientWidth ? `${Math.max(800, chartData.length * 30)}px` : '100%' }}>
                   <Line options={chartOptions} data={chartJsData} />
                 </div>
               </div>
