@@ -12,7 +12,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { generateMockData, GameData } from './mockData';
-import { Settings, BarChart2, CloudRain, Thermometer, Users, X, ExternalLink } from 'lucide-react';
+import { Settings, BarChart2, CloudRain, Thermometer, Users, X, ExternalLink, Trophy } from 'lucide-react';
 
 ChartJS.register(
   CategoryScale,
@@ -26,7 +26,7 @@ ChartJS.register(
 );
 
 type ViewMode = 'homeTeam' | 'stadium';
-type SortMode = 'date' | 'audienceDesc' | 'tempDesc' | 'rainAsc';
+type SortMode = 'date' | 'audienceDesc' | 'tempDesc' | 'rainAsc' | 'winRateDesc';
 
 export default function App() {
   const [gasUrl, setGasUrl] = useState('https://script.google.com/macros/s/AKfycbyGtfNgLdduKu5UfeSj5tVo4A3OmJQy_5s4B33BsPTpJ8z_eK0hYH01bED-UJ08mKV4/exec');
@@ -323,6 +323,20 @@ export default function App() {
 
     filtered = [...filtered].sort((a, b) => {
       switch (sortMode) {
+        case 'winRateDesc': {
+          const wrA = a.WinRate !== undefined ? a.WinRate : -1;
+          const wrB = b.WinRate !== undefined ? b.WinRate : -1;
+          if (wrA !== wrB) return wrB - wrA; // Descending win rate
+          
+          // Fallback to date sorting if win rate is same or missing
+          const timeDiff = new Date(a.Date).getTime() - new Date(b.Date).getTime();
+          if (timeDiff === 0) {
+            const snoA = isNaN(Number(a.GameSno)) ? 0 : Number(a.GameSno);
+            const snoB = isNaN(Number(b.GameSno)) ? 0 : Number(b.GameSno);
+            return snoA - snoB;
+          }
+          return timeDiff;
+        }
         case 'audienceDesc':
           return b.Audience - a.Audience;
         case 'tempDesc':
@@ -775,6 +789,14 @@ export default function App() {
             }`}
           >
             <CloudRain className="w-4 h-4" /> 降雨量由低到高
+          </button>
+          <button
+            onClick={() => setSortMode('winRateDesc')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              sortMode === 'winRateDesc' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <Trophy className="w-4 h-4" /> 年度勝率由高到低
           </button>
         </div>
 
