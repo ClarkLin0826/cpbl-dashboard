@@ -564,9 +564,40 @@ export default function App() {
         pointBorderColor: pointBorderColors,
         borderWidth: 3,
         pointBorderWidth: pointBorderWidths,
+        order: 2,
       }
     ]
   };
+
+  // If sorting by date, add a Moving Average trendline to smooth out the spikes
+  if (sortMode === 'date' && chartData.length > 5) {
+    const windowSpan = 7; // 7-game moving average
+    const movingAverageData = chartData.map((_, i, arr) => {
+      // Calculate a centered moving average if possible, otherwise skew to available data
+      const start = Math.max(0, i - Math.floor(windowSpan / 2));
+      const end = Math.min(arr.length, i + Math.floor(windowSpan / 2) + 1);
+      const slice = arr.slice(start, end);
+      return Math.round(slice.reduce((acc, curr) => acc + curr.Audience, 0) / slice.length);
+    });
+
+    chartJsData.datasets.push({
+      label: '7場移動平均趨勢',
+      data: movingAverageData,
+      borderColor: '#94a3b8', // slate-400
+      backgroundColor: 'transparent',
+      fill: false,
+      tension: 0.4,
+      pointStyle: 'circle',
+      pointRadius: 0,
+      pointHoverRadius: 0,
+      pointBackgroundColor: 'transparent',
+      pointBorderColor: 'transparent',
+      borderWidth: 2.5,
+      borderDash: [5, 5],
+      pointBorderWidth: 0,
+      order: 1, // Draw the trendline behind the main points if possible, or adjust
+    } as any);
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
@@ -858,8 +889,12 @@ export default function App() {
               {error}
             </div>
           ) : chartData.length === 0 && !loading ? (
-            <div className="flex-1 flex items-center justify-center text-gray-400">
-              沒有符合的資料
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-500 py-16">
+              <div className="bg-gray-50 p-6 rounded-full mb-4">
+                <BarChart2 className="w-12 h-12 text-gray-300" />
+              </div>
+              <p className="text-lg font-medium text-gray-700 mb-1">找不到符合的賽事資料</p>
+              <p className="text-sm text-gray-400">目前設定的篩選條件太嚴格，請嘗試放寬年份、星期或主題日限制。</p>
             </div>
           ) : (
             <div className="flex flex-col flex-1 w-full">
@@ -878,6 +913,55 @@ export default function App() {
             </div>
           )}
         </div>
+
+        {/* Data Grid Area */}
+        {!loading && chartData.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col mt-4">
+            <div className="p-4 border-b border-gray-100 bg-slate-50 flex justify-between items-center">
+              <h2 className="text-sm font-bold text-gray-700">詳細數據清單</h2>
+              <span className="text-xs text-gray-400 font-medium">點擊列查看完整資訊</span>
+            </div>
+            <div className="overflow-x-auto max-h-[400px]">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-slate-50 sticky top-0 z-10 text-gray-500 font-semibold text-xs border-b border-gray-200 shadow-sm">
+                  <tr>
+                    <th className="px-4 py-3">日期</th>
+                    <th className="px-4 py-3">對戰組合</th>
+                    <th className="px-4 py-3">球場</th>
+                    <th className="px-4 py-3 text-right">人數</th>
+                    <th className="px-4 py-3 text-center">氣象</th>
+                    <th className="px-4 py-3">主題日</th>
+                    <th className="px-4 py-3">啦啦隊</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {chartData.map((game, idx) => {
+                    const isMaxTemp = maxTemp !== null && game['MaxTemp(C)'] === maxTemp && maxTemp > 0;
+                    const isMaxRain = maxRain !== null && game['Rainfall(mm)'] === maxRain && maxRain > 0;
+                    return (
+                      <tr key={`${game.Date}-${game.GameSno}-${idx}`} className="hover:bg-blue-50/60 cursor-pointer transition-colors" onClick={() => setSelectedGame(game)}>
+                        <td className="px-4 py-3 text-gray-600 font-mono text-xs">{game.Date}</td>
+                        <td className="px-4 py-3 font-medium text-gray-800">
+                          {game.AwayTeam} <span className="text-gray-400 font-normal mx-1 text-xs">vs</span> {game.HomeTeam}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{game.Stadium}</td>
+                        <td className="px-4 py-3 text-right font-bold text-blue-600">{game.Audience.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            {isMaxTemp && <Thermometer className="w-4 h-4 text-red-500" title="最高氣溫" />}
+                            {isMaxRain && <CloudRain className="w-4 h-4 text-cyan-500" title="最高降雨量" />}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-amber-600 text-xs font-medium">{game.Theme || '-'}</td>
+                        <td className="px-4 py-3 text-gray-500 text-xs truncate max-w-[150px]" title={game.Cheerleaders}>{game.Cheerleaders || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
           </>
         )}
       </main>
