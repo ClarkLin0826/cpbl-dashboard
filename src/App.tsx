@@ -36,7 +36,8 @@ export default function App() {
   
   const [viewMode, setViewMode] = useState<ViewMode>('homeTeam');
   const [selectedOption, setSelectedOption] = useState<string>('');
-  const [selectedYear, setSelectedYear] = useState<string>('All');
+  const [startYear, setStartYear] = useState<string>('All');
+  const [endYear, setEndYear] = useState<string>('All');
   const [selectedStadiumFilter, setSelectedStadiumFilter] = useState<string>('All');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<string>('All');
   const [selectedThemeFilter, setSelectedThemeFilter] = useState<string>('All');
@@ -48,7 +49,8 @@ export default function App() {
 
   // Reset filters when view mode changes
   useEffect(() => {
-    setSelectedYear('All');
+    setStartYear('All');
+    setEndYear('All');
     setSelectedStadiumFilter('All');
     setSelectedDayOfWeek('All');
     setSelectedThemeFilter('All');
@@ -251,7 +253,10 @@ export default function App() {
 
       const yearMatch = String(game.Date).match(/^(\d{4})/);
       const itemYear = yearMatch ? yearMatch[1] : '';
-      const matchYear = selectedYear === 'All' || itemYear === selectedYear;
+      
+      let matchYear = true;
+      if (startYear !== 'All' && itemYear < startYear) matchYear = false;
+      if (endYear !== 'All' && itemYear > endYear) matchYear = false;
       if (!matchYear) return false;
 
       const matchStadium = viewMode === 'homeTeam' ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
@@ -290,7 +295,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, sortMode, selectedYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader]);
+  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader]);
 
   const maxTemp = chartData.length > 0 ? Math.max(...chartData.map(d => d['MaxTemp(C)'])) : null;
   const maxRain = chartData.length > 0 ? Math.max(...chartData.map(d => d['Rainfall(mm)'])) : null;
@@ -551,18 +556,31 @@ export default function App() {
             </select>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">選擇年份</label>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="All">全部年份</option>
-              {availableYears.filter(y => y !== 'All').map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
+          <div className="space-y-1 md:col-span-2 lg:col-span-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">選擇年份範圍</label>
+            <div className="flex items-center gap-2">
+              <select
+                value={startYear}
+                onChange={(e) => setStartYear(e.target.value)}
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="All">最早</option>
+                {availableYears.filter(y => y !== 'All').sort().map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              <span className="text-gray-400 font-medium">~</span>
+              <select
+                value={endYear}
+                onChange={(e) => setEndYear(e.target.value)}
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="All">最新</option>
+                {availableYears.filter(y => y !== 'All').sort((a, b) => b.localeCompare(a)).map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {viewMode === 'homeTeam' && (
