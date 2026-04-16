@@ -294,8 +294,15 @@ export default function App() {
         case 'rainAsc':
           return a['Rainfall(mm)'] - b['Rainfall(mm)'];
         case 'date':
-        default:
-          return new Date(a.Date).getTime() - new Date(b.Date).getTime();
+        default: {
+          const timeDiff = new Date(a.Date).getTime() - new Date(b.Date).getTime();
+          if (timeDiff === 0) {
+            const snoA = isNaN(Number(a.GameSno)) ? 0 : Number(a.GameSno);
+            const snoB = isNaN(Number(b.GameSno)) ? 0 : Number(b.GameSno);
+            return snoA - snoB;
+          }
+          return timeDiff;
+        }
       }
     });
 
@@ -465,7 +472,8 @@ export default function App() {
           return gradient;
         },
         fill: true,
-        tension: 0.4,
+        tension: 0.3,
+        cubicInterpolationMode: 'monotone',
         pointStyle: 'circle',
         pointRadius: pointRadii,
         pointHoverRadius: pointRadii.map(r => r + 2),
