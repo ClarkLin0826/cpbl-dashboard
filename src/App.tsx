@@ -498,13 +498,15 @@ export default function App() {
     return '#ffffff'; // white border for others
   });
 
-  const pointBorderWidths = chartData.map(d => d.Theme ? 3 : 2);
+  const isMassiveData = chartData.length > 500;
+
+  const pointBorderWidths = chartData.map(d => d.Theme ? (isMassiveData ? 1 : 3) : (isMassiveData ? 0 : 2));
 
   const pointRadii = chartData.map(d => {
     const isMaxTemp = maxTemp !== null && d['MaxTemp(C)'] === maxTemp && maxTemp > 0;
     const isMaxRain = maxRain !== null && d['Rainfall(mm)'] === maxRain && maxRain > 0;
-    if (d.Theme) return 8;
-    return (isMaxTemp || isMaxRain) ? 6 : 4;
+    if (d.Theme) return isMassiveData ? 3 : 8;
+    return (isMaxTemp || isMaxRain) ? (isMassiveData ? 2 : 6) : (isMassiveData ? 0 : 4);
   });
 
   const uniqueYearsInChart = Array.from(new Set(chartData.map(d => d.Date.split('/')[0])));
@@ -524,12 +526,32 @@ export default function App() {
 
   // Dynamic tension to prevent Bezier curve loops/overshoots when data points are too dense
   const getCurveTension = (dataLength: number) => {
+    if (dataLength > 500) return 0; // Completely straight lines for massive datasets
     if (dataLength > 200) return 0.1;
     if (dataLength > 100) return 0.2;
     if (dataLength > 50) return 0.3;
     return 0.4;
   };
   const dynamicTension = getCurveTension(chartData.length);
+
+  // Safely calculate responsive chart width to prevent crashing mobile browsers (iOS limits canvas to 4096px - 8192px)
+  const getSafeChartWidth = () => {
+    // If not many points, stick to 100% of container
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+    // On mobile, if we exceed roughly 20 points, we want horizontal scroll, 
+    // but we ABSOLUTELY CANNOT exceed ~4000px on older iOS or we get a broken canvas crash.
+    const maxPixels = isMobile ? 4000 : 8000;
+    const desiredPixels = Math.max(800, chartData.length * 30);
+    
+    // Check viewport width safely
+    const viewportW = typeof document !== 'undefined' ? document.body.clientWidth : 800;
+    
+    if (desiredPixels > viewportW) {
+      return `${Math.min(desiredPixels, maxPixels)}px`;
+    }
+    return '100%';
+  };
+  const safeChartWidth = getSafeChartWidth();
 
   const chartJsData = {
     labels: chartData.map((d, i, arr) => {
@@ -906,7 +928,7 @@ export default function App() {
                 <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#a855f7] border-2 border-white mr-1.5 shadow-sm"></span>最高溫且最高降雨</div>
               </div>
               <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
-                <div className="relative h-[300px] md:h-[400px]" style={{ width: Math.max(100, chartData.length * 20) > document.body.clientWidth ? `${Math.max(800, chartData.length * 30)}px` : '100%' }}>
+                <div className="relative h-[300px] md:h-[400px]" style={{ width: safeChartWidth }}>
                   <Line options={chartOptions} data={chartJsData} />
                 </div>
               </div>
