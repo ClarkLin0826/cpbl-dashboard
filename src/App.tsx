@@ -493,6 +493,21 @@ export default function App() {
     return (isMaxTemp || isMaxRain) ? 6 : 4;
   });
 
+  const uniqueYearsInChart = Array.from(new Set(chartData.map(d => d.Date.split('/')[0])));
+  const winRatesByYear = new Map<string, number>();
+  chartData.forEach(d => {
+    if (d.WinRate !== undefined) {
+      winRatesByYear.set(d.Date.split('/')[0], d.WinRate);
+    }
+  });
+
+  // Only display the average win rate if every year present in the chart has win rate data matched
+  // (e.g. if the user selects 2020-2025, it displays; if they select All, and 2014 lacks it, hide).
+  const allYearsHaveWinRate = uniqueYearsInChart.length > 0 && uniqueYearsInChart.every(year => winRatesByYear.has(year));
+  const avgWinRate = allYearsHaveWinRate 
+    ? Array.from(winRatesByYear.values()).reduce((a, b) => a + b, 0) / winRatesByYear.size 
+    : null;
+
   const chartJsData = {
     labels: chartData.map((d, i, arr) => {
       const sameDateGames = arr.filter(game => game.Date === d.Date);
@@ -792,13 +807,13 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 平均年度勝率 (If available) */}
-                {(chartData.filter(d => d.WinRate !== undefined).length > 0) && (
+                {/* 平均年度勝率 */}
+                {allYearsHaveWinRate && (
                   <div className="flex-1 md:flex-none bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2 flex flex-col items-start shadow-sm transition-transform hover:-translate-y-0.5">
                     <span className="text-indigo-700/80 text-xs font-bold mb-0.5 tracking-wider">平均年度勝率</span>
                     <div className="flex items-baseline gap-1">
                       <span className="text-indigo-700 text-xl font-black">
-                        {(chartData.filter(d => d.WinRate !== undefined).reduce((sum, d) => sum + d.WinRate!, 0) / chartData.filter(d => d.WinRate !== undefined).length).toFixed(3)}
+                        {avgWinRate!.toFixed(3)}
                       </span>
                     </div>
                   </div>
