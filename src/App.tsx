@@ -25,7 +25,7 @@ ChartJS.register(
   Filler
 );
 
-type ViewMode = 'homeTeam' | 'stadium';
+type ViewMode = 'homeTeam' | 'stadium' | 'matchup';
 type SortMode = 'date' | 'audienceDesc' | 'tempDesc' | 'rainAsc' | 'winRateDesc';
 
 export default function App() {
@@ -47,11 +47,11 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [selectedGame, setSelectedGame] = useState<GameData | null>(null);
   const [igMapping, setIgMapping] = useState<Record<string, string>>({});
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
   // Reset filters when view mode changes
   useEffect(() => {
-    setStartYear('All');
-    setEndYear('All');
+    // Preserve year bounds to avoid sudden resets when flipping viewMode
     setSelectedStadiumFilter('All');
     setSelectedDayOfWeek('All');
     setSelectedThemeFilter('All');
@@ -223,6 +223,34 @@ export default function App() {
           });
           
           setRawData(processedData);
+
+          if (isFirstLoad) {
+            // Compute unique years
+            const years = Array.from(new Set(processedData.map(d => d.Date ? d.Date.split('/')[0] : '').filter(Boolean))).sort();
+            if (years.length > 0) {
+              const latestYear = years[years.length - 1];
+              const startIdx = Math.max(0, years.length - 5);
+              setStartYear(years[startIdx]);
+              setEndYear(latestYear);
+            }
+
+            // Find a preferred active team
+            const activeTeams = ['中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將', '台鋼雄鷹'];
+            const allHomeTeams = new Set(processedData.map(d => d.HomeTeam).filter(Boolean));
+            let defaultTeam = '';
+            for (const t of activeTeams) {
+              if (allHomeTeams.has(t)) {
+                defaultTeam = t;
+                break;
+              }
+            }
+            if (!defaultTeam) {
+              defaultTeam = Array.from(allHomeTeams).sort()[0] as string;
+            }
+            setSelectedOption(defaultTeam);
+
+            setIsFirstLoad(false);
+          }
         }
       } catch (err: any) {
         let errorMessage = '無法載入資料，請檢查網址或網路連線。';
@@ -241,9 +269,9 @@ export default function App() {
     fetchData();
   }, [gasUrl]);
 
-  // Extract options based on view mode
-  const options = useMemo(() => {
-    if (rawData.length === 0) return [];
+  // Update selected option when options change and current is invalid
+  useEffect(() => {
+    if (rawData.length === 0) return;
     const set = new Set<string>();
     rawData.forEach(game => {
       if (viewMode === 'homeTeam' && game.HomeTeam) set.add(game.HomeTeam);
@@ -251,13 +279,28 @@ export default function App() {
     });
     const sortedOptions = Array.from(set).sort();
     
-    // Auto-select first option if current selection is invalid
     if (!sortedOptions.includes(selectedOption) && sortedOptions.length > 0) {
-      setSelectedOption(sortedOptions[0]);
+      if (viewMode === 'homeTeam') {
+        const activeTeams = ['中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將', '台鋼雄鷹'];
+        const foundActive = activeTeams.find(t => sortedOptions.includes(t));
+        setSelectedOption(foundActive || sortedOptions[0]);
+      } else {
+        const priorityStadiums = ['臺北大巨蛋', '洲際', '新莊', '天母', '台南', '澄清湖'];
+        const foundPriority = priorityStadiums.find(s => sortedOptions.includes(s));
+        setSelectedOption(foundPriority || sortedOptions[0]);
+      }
     }
-    
-    return sortedOptions;
   }, [rawData, viewMode, selectedOption]);
+
+  const options = useMemo(() => {
+    if (rawData.length === 0) return [];
+    const set = new Set<string>();
+    rawData.forEach(game => {
+      if (viewMode === 'homeTeam' && game.HomeTeam) set.add(game.HomeTeam);
+      if (viewMode === 'stadium' && game.Stadium) set.add(game.Stadium);
+    });
+    return Array.from(set).sort();
+  }, [rawData, viewMode]);
 
   // Extract available years
   const availableYears = useMemo(() => {
@@ -302,8 +345,10 @@ export default function App() {
         return false;
       }
       
-      const matchView = viewMode === 'homeTeam' ? game.HomeTeam === selectedOption : game.Stadium === selectedOption;
-      if (!matchView) return false;
+      if (viewMode !== 'matchup') {
+        const matchView = viewMode === 'homeTeam' ? game.HomeTeam === selectedOption : game.Stadium === selectedOption;
+        if (!matchView) return false;
+      }
 
       const yearMatch = String(game.Date).match(/^(\d{4})/);
       const itemYear = yearMatch ? yearMatch[1] : '';
@@ -705,25 +750,28 @@ export default function App() {
             >
               <option value="homeTeam">各隊主場人數</option>
               <option value="stadium">各球場人數</option>
+              <option value="matchup">對戰組合交叉分析</option>
             </select>
           </div>
           
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              {viewMode === 'homeTeam' ? '選擇球隊' : '選擇球場'}
-            </label>
-            <select
-              value={selectedOption}
-              onChange={(e) => setSelectedOption(e.target.value)}
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              {options.map(opt => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          </div>
+          {viewMode !== 'matchup' && (
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                {viewMode === 'homeTeam' ? '選擇球隊' : '選擇球場'}
+              </label>
+              <select
+                value={selectedOption}
+                onChange={(e) => setSelectedOption(e.target.value)}
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                {options.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
-          <div className="space-y-1 md:col-span-2 lg:col-span-1">
+          <div className={`space-y-1 ${viewMode === 'matchup' ? 'col-span-2 md:col-span-1' : 'md:col-span-2 lg:col-span-1'}`}>
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">選擇年份範圍</label>
             <div className="flex items-center gap-2">
               <select
@@ -908,18 +956,6 @@ export default function App() {
                     <span className="text-amber-800/70 text-sm font-medium">人</span>
                   </div>
                 </div>
-
-                {/* 平均年度勝率 */}
-                {viewMode === 'homeTeam' && allYearsHaveWinRate && (
-                  <div className="col-span-2 md:col-span-1 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2 flex flex-col items-start shadow-sm transition-transform hover:-translate-y-0.5">
-                    <span className="text-indigo-700/80 text-xs font-bold mb-0.5 tracking-wider">平均年度勝率</span>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-indigo-700 text-xl font-black">
-                        {avgWinRate!.toFixed(3)}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -935,6 +971,76 @@ export default function App() {
               </div>
               <p className="text-lg font-medium text-gray-700 mb-1">找不到符合的賽事資料</p>
               <p className="text-sm text-gray-400">目前設定的篩選條件太嚴格，請嘗試放寬年份、星期或主題日限制。</p>
+            </div>
+          ) : viewMode === 'matchup' ? (
+            <div className="flex flex-col flex-1 w-full bg-white p-4 rounded-xl border border-gray-100 shadow-sm mt-4 overflow-x-auto">
+              <h3 className="text-lg font-bold text-slate-800 mb-4 text-center">對戰組合場均人數矩陣 (Heatmap)</h3>
+              <div className="text-xs text-gray-500 mb-2 flex justify-end items-center gap-2">
+                <span>圖例顏色深淺代表平均人數多寡（顏色越橘越多人）</span>
+              </div>
+              <table className="w-full text-center border-collapse text-sm min-w-[600px]">
+                <thead>
+                  <tr>
+                    <th className="p-3 border border-gray-200 bg-slate-50 text-slate-600 font-semibold w-24 whitespace-nowrap">
+                      主場 \ 客場
+                    </th>
+                    {Array.from(new Set([...chartData.map(d=>d.HomeTeam), ...chartData.map(d=>d.AwayTeam)])).filter(Boolean).sort().map(team => (
+                      <th key={`col-${team}`} className="p-3 border border-gray-200 bg-slate-50 text-slate-700 font-medium">
+                        {team}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from(new Set(chartData.map(d=>d.HomeTeam))).filter(Boolean).sort().map(home => {
+                    const allTeams = Array.from(new Set([...chartData.map(d=>d.HomeTeam), ...chartData.map(d=>d.AwayTeam)])).filter(Boolean).sort();
+                    
+                    let maxAvg = 1;
+                    chartData.forEach(d => maxAvg = Math.max(maxAvg, d.Audience)); // Simplified max bound for coloring
+                    const absoluteMaxAvg = 15000; // Cap at 15k for color scaling
+
+                    return (
+                      <tr key={`row-${home}`}>
+                        <td className="p-3 border border-gray-200 bg-slate-50 font-semibold text-slate-700 whitespace-nowrap">
+                          {home} <span className="text-xs text-slate-400 font-normal">(主)</span>
+                        </td>
+                        {allTeams.map(away => {
+                          if (home === away) {
+                            return <td key={`cell-${home}-${away}`} className="p-3 border border-gray-200 bg-gray-100 text-gray-300">-</td>;
+                          }
+                          const matchGames = chartData.filter(d => d.HomeTeam === home && d.AwayTeam === away);
+                          if (matchGames.length === 0) {
+                            return <td key={`cell-${home}-${away}`} className="p-3 border border-gray-200 text-gray-300">-</td>;
+                          }
+                          const avg = Math.round(matchGames.reduce((acc, curr) => acc + curr.Audience, 0) / matchGames.length);
+                          
+                          // Color mapping
+                          const intensity = Math.min(1, avg / absoluteMaxAvg);
+                          // From white(0) to orange(1): #fff to #f97316
+                          const r = Math.round(255 - (255 - 249) * intensity);
+                          const g = Math.round(255 - (255 - 115) * intensity);
+                          const b = Math.round(255 - (255 - 22) * intensity);
+                          const bgColor = `rgba(${r}, ${g}, ${b}, ${0.1 + intensity * 0.9})`;
+                          const textColor = intensity > 0.6 ? '#fff' : '#1e293b';
+
+                          return (
+                            <td key={`cell-${home}-${away}`} className="border border-gray-200 transition-colors hover:ring-2 hover:ring-inset hover:ring-blue-500 cursor-default" style={{ backgroundColor: bgColor, color: textColor }}>
+                              <div className="flex flex-col items-center justify-center p-2">
+                                <span className="font-bold text-[15px]">{avg.toLocaleString()}</span>
+                                <span className="text-[10px] opacity-75 mt-0.5">({matchGames.length}場)</span>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className="mt-4 text-xs text-center text-gray-400">
+                註：左側縱軸為主場球隊，上方橫軸為客場球隊。<br/>
+                格子內數字為「場均觀眾數」，下方小括號表示符合條件的有效賽事總場次。
+              </div>
             </div>
           ) : (
             <div className="flex flex-col flex-1 w-full">
@@ -955,7 +1061,7 @@ export default function App() {
         </div>
 
         {/* Data Grid Area */}
-        {!loading && chartData.length > 0 && (
+        {!loading && chartData.length > 0 && viewMode !== 'matchup' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col mt-4">
             <div className="p-4 border-b border-gray-100 bg-slate-50 flex justify-between items-center">
               <h2 className="text-sm font-bold text-gray-700">詳細數據清單</h2>
