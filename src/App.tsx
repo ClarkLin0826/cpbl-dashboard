@@ -168,7 +168,22 @@ export default function App() {
           // Ensure numeric values
           const processedData = uniqueData.map(item => {
             const year = item.Date ? item.Date.split('/')[0] : '';
-            const homeTeam = item.HomeTeam || '';
+            
+            // Normalize Team names to prevent duplicated options (e.g., from typos in the sheet)
+            let homeTeam = (item.HomeTeam || '').trim();
+            if (homeTeam.includes('統一') && homeTeam.includes('獅')) homeTeam = '統一7-ELEVEn獅';
+            if (homeTeam === '統一狮') homeTeam = '統一7-ELEVEn獅';
+            if (homeTeam === 'Lamigo桃猿') homeTeam = 'Lamigo桃猿';
+            if (homeTeam === '樂天桃猿') homeTeam = '樂天桃猿';
+            if (homeTeam === '中信兄弟') homeTeam = '中信兄弟';
+            if (homeTeam === '富邦悍將') homeTeam = '富邦悍將';
+            if (homeTeam === '味全龍') homeTeam = '味全龍';
+            
+            let awayTeam = (item.AwayTeam || '').trim();
+            if (awayTeam.includes('統一') && awayTeam.includes('獅')) awayTeam = '統一7-ELEVEn獅';
+            if (awayTeam === '統一狮') awayTeam = '統一7-ELEVEn獅';
+            
+            let stadium = (item.Stadium || '').trim();
             
             let winRateInfo;
             if (winRatesSheet.length > 0) {
@@ -192,6 +207,9 @@ export default function App() {
 
             return {
               ...item,
+              HomeTeam: homeTeam,
+              AwayTeam: awayTeam,
+              Stadium: stadium,
               Audience: Number(item.Audience) || 0,
               'MaxTemp(C)': Number(item['MaxTemp(C)']) || 0,
               'Rainfall(mm)': Number(item['Rainfall(mm)']) || 0,
