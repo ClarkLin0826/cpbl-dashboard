@@ -12,7 +12,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { generateMockData, GameData } from './mockData';
-import { Settings, BarChart2, CloudRain, Thermometer, Users, X, ExternalLink, Trophy, Calendar, Download, RefreshCw, Filter } from 'lucide-react';
+import { Settings, BarChart2, CloudRain, Thermometer, Users, X, ExternalLink, Trophy, Calendar, Download, RefreshCw, Filter, Share2, Check } from 'lucide-react';
 
 ChartJS.register(
   CategoryScale,
@@ -55,6 +55,17 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy', err);
+    }
+  };
 
   // Sync state to URL
   useEffect(() => {
@@ -993,6 +1004,21 @@ export default function App() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleShare}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors font-medium text-sm border ${
+              copied 
+                ? 'bg-green-500/20 text-green-100 border-green-400/50 dark:bg-green-500/20 dark:text-green-300' 
+                : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 dark:bg-slate-700 dark:hover:bg-slate-600 dark:border-slate-600'
+            }`}
+            title="複製當前狀態連結"
+          >
+            {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+            <span className="hidden sm:inline">{copied ? '已複製連結' : '分享'}</span>
+          </button>
+          
+          <div className="w-px h-6 bg-blue-500 dark:bg-slate-600 mx-1"></div>
+
           <button 
             onClick={handleForceRefresh}
             disabled={loading}
