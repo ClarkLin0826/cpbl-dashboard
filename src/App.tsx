@@ -1162,7 +1162,19 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {chartData.map((game, idx) => {
+                  {([...chartData].sort((a, b) => {
+                    // For the table, if sortMode is 'date', we want newest -> oldest
+                    if (sortMode === 'date') {
+                      const timeDiff = new Date(b.Date).getTime() - new Date(a.Date).getTime();
+                      if (timeDiff === 0) {
+                        const snoA = isNaN(Number(a.GameSno)) ? 0 : Number(a.GameSno);
+                        const snoB = isNaN(Number(b.GameSno)) ? 0 : Number(b.GameSno);
+                        return snoB - snoA;
+                      }
+                      return timeDiff;
+                    }
+                    return 0; // retain chartData ordering for other modes
+                  })).map((game, idx) => {
                     const isMaxTemp = maxTemp !== null && game['MaxTemp(C)'] === maxTemp && maxTemp > 0;
                     const isMaxRain = maxRain !== null && game['Rainfall(mm)'] === maxRain && maxRain > 0;
                     return (
