@@ -12,7 +12,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { generateMockData, GameData } from './mockData';
-import { Settings, BarChart2, CloudRain, Thermometer, Users, X, ExternalLink, Trophy } from 'lucide-react';
+import { Settings, BarChart2, CloudRain, Thermometer, Users, X, ExternalLink, Trophy, Calendar } from 'lucide-react';
 
 ChartJS.register(
   CategoryScale,
@@ -43,6 +43,7 @@ export default function App() {
   const [selectedThemeFilter, setSelectedThemeFilter] = useState<string>('All');
   const [selectedCheerleader, setSelectedCheerleader] = useState<string>('All');
   const [selectedWinRateFilter, setSelectedWinRateFilter] = useState<string>('All');
+  const [showNextWeek, setShowNextWeek] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('date');
   const [showSettings, setShowSettings] = useState(false);
   const [selectedGame, setSelectedGame] = useState<GameData | null>(null);
@@ -389,10 +390,30 @@ export default function App() {
     let filtered = rawData.filter(game => {
       if (!game.Date) return false;
       
-      // Filter out future games that don't have RainProb(%) and don't have Audience
-      // This ensures we only show past games (with Audience) or future games with weather forecast
-      if (!game.Audience && game['RainProb(%)'] === undefined) {
-        return false;
+      const gameDate = new Date(game.Date);
+      
+      if (showNextWeek) {
+        // Future week mode: only games from today to today+7
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+        nextWeek.setHours(23, 59, 59, 999);
+        
+        if (gameDate < today || gameDate > nextWeek) return false;
+      } else {
+        // Normal mode
+        // Filter out future games that don't have RainProb(%) and don't have Audience
+        if (!game.Audience && game['RainProb(%)'] === undefined) {
+          return false;
+        }
+
+        const yearMatch = String(game.Date).match(/^(\d{4})/);
+        const itemYear = yearMatch ? yearMatch[1] : '';
+        
+        let matchYear = true;
+        if (startYear !== 'All' && itemYear < startYear) matchYear = false;
+        if (endYear !== 'All' && itemYear > endYear) matchYear = false;
+        if (!matchYear) return false;
       }
       
       if (viewMode !== 'matchup') {
@@ -400,20 +421,11 @@ export default function App() {
         if (!matchView) return false;
       }
 
-      const yearMatch = String(game.Date).match(/^(\d{4})/);
-      const itemYear = yearMatch ? yearMatch[1] : '';
-      
-      let matchYear = true;
-      if (startYear !== 'All' && itemYear < startYear) matchYear = false;
-      if (endYear !== 'All' && itemYear > endYear) matchYear = false;
-      if (!matchYear) return false;
-
       const matchStadium = viewMode === 'homeTeam' ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
       if (!matchStadium) return false;
 
       const dayOfWeekMap = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-      const dateObj = new Date(game.Date);
-      const dayStr = dayOfWeekMap[dateObj.getDay()];
+      const dayStr = dayOfWeekMap[gameDate.getDay()];
       const matchDay = selectedDayOfWeek === 'All' || dayStr === selectedDayOfWeek;
       if (!matchDay) return false;
 
@@ -431,8 +443,8 @@ export default function App() {
                            selectedWinRateFilter === '<0.5' ? (game.WinRate !== undefined && game.WinRate < 0.5) : true;
       if (!matchWinRate) return false;
 
-      // Filter out games with 0 audience (assuming unplayed games)
-      if (game.Audience === 0) return false;
+      // Filter out games with 0 audience (assuming unplayed games) only in normal mode
+      if (!showNextWeek && game.Audience === 0) return false;
 
       return true;
     });
@@ -473,7 +485,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedWinRateFilter]);
+  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedWinRateFilter, showNextWeek]);
 
   const maxTemp = chartData.length > 0 ? Math.max(...chartData.map(d => d['MaxTemp(C)'])) : null;
   const maxRain = chartData.length > 0 ? Math.max(...chartData.map(d => d['Rainfall(mm)'])) : null;
@@ -839,9 +851,10 @@ export default function App() {
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">選擇年份範圍</label>
             <div className="flex items-center gap-2">
               <select
-                value={startYear}
+                value={showNextWeek ? 'All' : startYear}
                 onChange={(e) => setStartYear(e.target.value)}
-                className="flex-1 min-w-0 p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none truncate"
+                disabled={showNextWeek}
+                className="flex-1 min-w-0 p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none truncate disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="All">最早</option>
                 {availableYears.filter(y => y !== 'All').sort().map(y => (
@@ -850,9 +863,10 @@ export default function App() {
               </select>
               <span className="text-gray-400 font-medium shrink-0">~</span>
               <select
-                value={endYear}
+                value={showNextWeek ? 'All' : endYear}
                 onChange={(e) => setEndYear(e.target.value)}
-                className="flex-1 min-w-0 p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none truncate"
+                disabled={showNextWeek}
+                className="flex-1 min-w-0 p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none truncate disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="All">最新</option>
                 {availableYears.filter(y => y !== 'All').sort((a, b) => b.localeCompare(a)).map(y => (
@@ -940,7 +954,27 @@ export default function App() {
         </div>
 
         {/* Sorting */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <button
+            onClick={() => {
+              const nextState = !showNextWeek;
+              setShowNextWeek(nextState);
+              if (nextState) {
+                setSortMode('date');
+              }
+            }}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-all ${
+              showNextWeek 
+                ? 'bg-fuchsia-600 text-white shadow-md transform scale-105' 
+                : 'bg-white dark:bg-slate-800 text-fuchsia-600 dark:text-fuchsia-400 border border-fuchsia-200 dark:border-fuchsia-800 hover:bg-fuchsia-50 dark:hover:bg-fuchsia-900/40'
+            }`}
+          >
+            <Calendar className="w-4 h-4" /> 
+            {showNextWeek ? '返回歷史資料' : '預覽未來一週'}
+          </button>
+          
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1 hidden sm:block"></div>
+
           <button
             onClick={() => setSortMode('date')}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
@@ -987,11 +1021,11 @@ export default function App() {
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 min-h-[400px] flex flex-col">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
             <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-              {selectedOption} - 人數趨勢
+              {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : `${selectedOption} - 人數趨勢`}
               {loading && <span className="text-sm font-normal text-gray-400 animate-pulse">載入中...</span>}
             </h2>
             
-            {!loading && chartData.length > 0 && (
+            {!loading && chartData.length > 0 && !showNextWeek && (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:flex lg:flex-nowrap gap-3 items-stretch w-full md:w-auto mt-2 md:mt-0">
                 {/* 總場次 */}
                 <div className="col-span-1 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-2 flex flex-col items-start shadow-sm transition-transform hover:-translate-y-0.5">
@@ -1125,18 +1159,32 @@ export default function App() {
             </div>
           ) : (
             <div className="flex flex-col flex-1 w-full">
-              <div className="flex flex-wrap items-center gap-4 mb-4 text-xs text-gray-600 dark:text-gray-300">
-                <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-[#3b82f6] border-2 border-white mr-1.5 shadow-sm"></span>一般場次</div>
-                <div className="flex items-center"><span className="w-4 h-4 rounded-full bg-[#f59e0b] border-[3px] border-[#fef3c7] mr-1.5 shadow-sm"></span>主題日</div>
-                <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#ef4444] border-2 border-white mr-1.5 shadow-sm"></span>最高氣溫</div>
-                <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#06b6d4] border-2 border-white mr-1.5 shadow-sm"></span>最高降雨量</div>
-                <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#a855f7] border-2 border-white mr-1.5 shadow-sm"></span>最高溫且最高降雨</div>
-              </div>
-              <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
-                <div className="relative h-[300px] md:h-[400px]" style={{ width: safeChartWidth }}>
-                  <Line options={chartOptions} data={chartJsData} />
+              {!showNextWeek ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-4 mb-4 text-xs text-gray-600 dark:text-gray-300">
+                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-[#3b82f6] border-2 border-white mr-1.5 shadow-sm"></span>一般場次</div>
+                    <div className="flex items-center"><span className="w-4 h-4 rounded-full bg-[#f59e0b] border-[3px] border-[#fef3c7] mr-1.5 shadow-sm"></span>主題日</div>
+                    <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#ef4444] border-2 border-white mr-1.5 shadow-sm"></span>最高氣溫</div>
+                    <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#06b6d4] border-2 border-white mr-1.5 shadow-sm"></span>最高降雨量</div>
+                    <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#a855f7] border-2 border-white mr-1.5 shadow-sm"></span>最高溫且最高降雨</div>
+                  </div>
+                  <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
+                    <div className="relative h-[300px] md:h-[400px]" style={{ width: safeChartWidth }}>
+                      <Line options={chartOptions} data={chartJsData} />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center p-10 mt-10 rounded-xl bg-fuchsia-50/50 dark:bg-slate-900 border border-fuchsia-100 dark:border-slate-800">
+                  <div className="text-center space-y-4 max-w-sm">
+                    <Calendar className="w-16 h-16 text-fuchsia-400 dark:text-fuchsia-600 mx-auto" />
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">未來一週天氣與賽程</h3>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">下方清單已為您篩選出未來七天的賽程，請往下捲動查閱詳細的啦啦隊班表與降雨機率預報。</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -1163,15 +1211,16 @@ export default function App() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {([...chartData].sort((a, b) => {
-                    // For the table, if sortMode is 'date', we want newest -> oldest
+                    // For the table, if sortMode is 'date', we want newest -> oldest for history
+                    // But for future week, we want oldest -> newest (closest upcoming first)
                     if (sortMode === 'date') {
                       const timeDiff = new Date(b.Date).getTime() - new Date(a.Date).getTime();
                       if (timeDiff === 0) {
                         const snoA = isNaN(Number(a.GameSno)) ? 0 : Number(a.GameSno);
                         const snoB = isNaN(Number(b.GameSno)) ? 0 : Number(b.GameSno);
-                        return snoB - snoA;
+                        return showNextWeek ? snoA - snoB : snoB - snoA;
                       }
-                      return timeDiff;
+                      return showNextWeek ? -timeDiff : timeDiff;
                     }
                     return 0; // retain chartData ordering for other modes
                   })).map((game, idx) => {
@@ -1184,11 +1233,18 @@ export default function App() {
                           {game.AwayTeam} <span className="text-gray-400 font-normal mx-1 text-xs">vs</span> {game.HomeTeam}
                         </td>
                         <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{game.Stadium}</td>
-                        <td className="px-4 py-3 text-right font-bold text-blue-600">{game.Audience.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right font-bold text-blue-600">
+                          {game.Audience === 0 ? <span className="text-gray-400 font-normal">尚未舉行</span> : game.Audience.toLocaleString()}
+                        </td>
                         <td className="px-4 py-3 text-center">
                           <div className="flex items-center justify-center gap-2">
                             {isMaxTemp && <Thermometer className="w-4 h-4 text-red-500" title="最高氣溫" />}
                             {isMaxRain && <CloudRain className="w-4 h-4 text-cyan-500" title="最高降雨量" />}
+                            {game['RainProb(%)'] !== undefined && game['RainProb(%)'] > 0 && (
+                              <span className="text-xs text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/30 px-1.5 py-0.5 rounded font-medium">
+                                降雨 {game['RainProb(%)']}%
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-amber-600 dark:text-amber-400 text-xs font-medium">{game.Theme || '-'}</td>
@@ -1224,40 +1280,40 @@ export default function App() {
             
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm">
-                <div className="col-span-2 flex items-center justify-between border-b pb-2">
+                <div className="col-span-2 flex items-center justify-between border-b dark:border-slate-700 pb-2">
                   <span className="text-gray-500 dark:text-gray-400">日期</span>
-                  <span className="font-medium text-gray-900">{selectedGame.Date}</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{selectedGame.Date}</span>
                 </div>
-                <div className="col-span-2 flex items-center justify-between border-b pb-2">
+                <div className="col-span-2 flex items-center justify-between border-b dark:border-slate-700 pb-2">
                   <span className="text-gray-500 dark:text-gray-400">對戰組合</span>
-                  <span className="font-medium text-gray-900">{selectedGame.AwayTeam} vs {selectedGame.HomeTeam}</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{selectedGame.AwayTeam} vs {selectedGame.HomeTeam}</span>
                 </div>
-                <div className="flex items-center justify-between border-b pb-2">
+                <div className="flex items-center justify-between border-b dark:border-slate-700 pb-2">
                   <span className="text-gray-500 dark:text-gray-400">場地</span>
-                  <span className="font-medium text-gray-900">{selectedGame.Stadium}</span>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{selectedGame.Stadium}</span>
                 </div>
-                <div className="flex items-center justify-between border-b pb-2">
+                <div className="flex items-center justify-between border-b dark:border-slate-700 pb-2">
                   <span className="text-gray-500 dark:text-gray-400">觀眾人數</span>
-                  <span className="font-medium text-blue-600">{selectedGame.Audience.toLocaleString()} 人</span>
+                  <span className="font-medium text-blue-600 dark:text-blue-400">{selectedGame.Audience === 0 ? '尚未舉行' : `${selectedGame.Audience.toLocaleString()} 人`}</span>
                 </div>
-                <div className="flex items-center justify-between border-b pb-2">
+                <div className="flex items-center justify-between border-b dark:border-slate-700 pb-2">
                   <span className="text-gray-500 dark:text-gray-400">最高氣溫</span>
-                  <span className="font-medium text-red-500">{selectedGame['MaxTemp(C)']}°C</span>
+                  <span className="font-medium text-red-500 dark:text-red-400">{selectedGame['MaxTemp(C)']}°C</span>
                 </div>
-                <div className="flex items-center justify-between border-b pb-2">
+                <div className="flex items-center justify-between border-b dark:border-slate-700 pb-2">
                   <span className="text-gray-500 dark:text-gray-400">降雨量</span>
-                  <span className="font-medium text-cyan-600">{selectedGame['Rainfall(mm)']} mm</span>
+                  <span className="font-medium text-cyan-600 dark:text-cyan-400">{selectedGame['Rainfall(mm)']} mm</span>
                 </div>
                 
                 {selectedGame['RainProb(%)'] !== undefined && (
-                  <div className="flex items-center justify-between border-b pb-2">
+                  <div className="flex items-center justify-between border-b dark:border-slate-700 pb-2">
                     <span className="text-gray-500 dark:text-gray-400">降雨機率</span>
-                    <span className="font-medium text-blue-500">{selectedGame['RainProb(%)']}%</span>
+                    <span className="font-medium text-purple-500 dark:text-purple-400">{selectedGame['RainProb(%)']}%</span>
                   </div>
                 )}
                 
                 {selectedGame.Theme && (
-                  <div className="col-span-2 flex items-center justify-between border-b pb-2">
+                  <div className="col-span-2 flex items-center justify-between border-b dark:border-slate-700 pb-2">
                     <span className="text-gray-500 dark:text-gray-400">主題日</span>
                     <span className="font-medium text-amber-500 flex items-center gap-1">
                       {selectedGame.Theme} ⭐
