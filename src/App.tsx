@@ -12,7 +12,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { generateMockData, GameData } from './mockData';
-import { Settings, BarChart2, CloudRain, Thermometer, Users, X, ExternalLink, Trophy, Calendar } from 'lucide-react';
+import { Settings, BarChart2, CloudRain, Thermometer, Users, X, ExternalLink, Trophy, Calendar, Download, RefreshCw, Filter } from 'lucide-react';
 
 ChartJS.register(
   CategoryScale,
@@ -29,27 +29,52 @@ type ViewMode = 'homeTeam' | 'stadium' | 'matchup';
 type SortMode = 'date' | 'audienceDesc' | 'tempDesc' | 'rainAsc' | 'winRateDesc';
 
 export default function App() {
+  const searchParams = new URL(window.location.href).searchParams;
+  
   const [gasUrl, setGasUrl] = useState('https://script.google.com/macros/s/AKfycbyGtfNgLdduKu5UfeSj5tVo4A3OmJQy_5s4B33BsPTpJ8z_eK0hYH01bED-UJ08mKV4/exec');
   const [rawData, setRawData] = useState<GameData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [viewMode, setViewMode] = useState<ViewMode>('homeTeam');
-  const [selectedOption, setSelectedOption] = useState<string>('');
-  const [startYear, setStartYear] = useState<string>('All');
-  const [endYear, setEndYear] = useState<string>('All');
-  const [selectedStadiumFilter, setSelectedStadiumFilter] = useState<string>('All');
-  const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<string>('All');
-  const [selectedThemeFilter, setSelectedThemeFilter] = useState<string>('All');
-  const [selectedCheerleader, setSelectedCheerleader] = useState<string>('All');
-  const [selectedWinRateFilter, setSelectedWinRateFilter] = useState<string>('All');
-  const [showNextWeek, setShowNextWeek] = useState(false);
-  const [sortMode, setSortMode] = useState<SortMode>('date');
+  const [viewMode, setViewMode] = useState<ViewMode>((searchParams.get('v') as ViewMode) || 'homeTeam');
+  const [selectedOption, setSelectedOption] = useState<string>(searchParams.get('team') || '');
+  const [startYear, setStartYear] = useState<string>(searchParams.get('sy') || 'All');
+  const [endYear, setEndYear] = useState<string>(searchParams.get('ey') || 'All');
+  const [selectedStadiumFilter, setSelectedStadiumFilter] = useState<string>(searchParams.get('stad') || 'All');
+  const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<string>(searchParams.get('day') || 'All');
+  const [selectedThemeFilter, setSelectedThemeFilter] = useState<string>(searchParams.get('theme') || 'All');
+  const [selectedCheerleader, setSelectedCheerleader] = useState<string>(searchParams.get('cheer') || 'All');
+  const [selectedWinRateFilter, setSelectedWinRateFilter] = useState<string>(searchParams.get('wr') || 'All');
+  const [showNextWeek, setShowNextWeek] = useState(searchParams.get('nw') === 'true');
+  const [sortMode, setSortMode] = useState<SortMode>((searchParams.get('sort') as SortMode) || 'date');
+  
   const [showSettings, setShowSettings] = useState(false);
   const [selectedGame, setSelectedGame] = useState<GameData | null>(null);
   const [igMapping, setIgMapping] = useState<Record<string, string>>({});
   const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+
+  // Sync state to URL
+  useEffect(() => {
+    if (isFirstLoad) return;
+    const params = new URLSearchParams();
+    if (viewMode !== 'homeTeam') params.set('v', viewMode);
+    if (selectedOption) params.set('team', selectedOption);
+    if (startYear !== 'All') params.set('sy', startYear);
+    if (endYear !== 'All') params.set('ey', endYear);
+    if (selectedStadiumFilter !== 'All') params.set('stad', selectedStadiumFilter);
+    if (selectedDayOfWeek !== 'All') params.set('day', selectedDayOfWeek);
+    if (selectedThemeFilter !== 'All') params.set('theme', selectedThemeFilter);
+    if (selectedCheerleader !== 'All') params.set('cheer', selectedCheerleader);
+    if (selectedWinRateFilter !== 'All') params.set('wr', selectedWinRateFilter);
+    if (showNextWeek) params.set('nw', 'true');
+    if (sortMode !== 'date') params.set('sort', sortMode);
+    
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, '', newUrl);
+  }, [viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedWinRateFilter, showNextWeek, sortMode, isFirstLoad]);
 
   // Default to system preference if we don't have a saved one
   useEffect(() => {
@@ -197,29 +222,40 @@ export default function App() {
       setRawData(processedData);
 
       if (isInitial) {
+        let defaultStartYear = searchParams.get('sy') || 'All';
+        let defaultEndYear = searchParams.get('ey') || 'All';
+
         const years = Array.from(new Set(processedData.map(d => d.Date ? d.Date.split('/')[0] : '').filter(Boolean))).sort();
         if (years.length > 0) {
           const latestYear = years[years.length - 1];
           const startIdx = Math.max(0, years.length - 3);
-          setStartYear(years[startIdx]);
-          setEndYear(latestYear);
+          
+          if (defaultStartYear === 'All' && !searchParams.has('sy')) defaultStartYear = years[startIdx];
+          if (defaultEndYear === 'All' && !searchParams.has('ey')) defaultEndYear = latestYear;
+          
+          setStartYear(defaultStartYear);
+          setEndYear(defaultEndYear);
         }
 
         const activeTeams = ['台鋼雄鷹', '中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將'];
         const allHomeTeams = new Set(processedData.map(d => d.HomeTeam).filter(Boolean));
-        let defaultTeam = '';
-        for (const t of activeTeams) {
-          if (allHomeTeams.has(t)) {
-            defaultTeam = t;
-            break;
-          }
-        }
+        let defaultTeam = searchParams.get('team') || '';
+        
         if (!defaultTeam) {
-          defaultTeam = Array.from(allHomeTeams).sort()[0] as string;
+          for (const t of activeTeams) {
+            if (allHomeTeams.has(t)) {
+              defaultTeam = t;
+              break;
+            }
+          }
+          if (!defaultTeam) {
+            defaultTeam = Array.from(allHomeTeams).sort()[0] as string;
+          }
         }
         setSelectedOption(defaultTeam);
         setIsFirstLoad(false);
       }
+      setLastUpdated(new Date());
     };
 
     const fetchData = async () => {
@@ -537,6 +573,153 @@ export default function App() {
   const maxTemp = chartData.length > 0 ? Math.max(...chartData.map(d => d['MaxTemp(C)'])) : null;
   const maxRain = chartData.length > 0 ? Math.max(...chartData.map(d => d['Rainfall(mm)'])) : null;
 
+  const exportToCSV = () => {
+    if (chartData.length === 0) return;
+    
+    const headers = ['日期', '主場球隊', '客場球隊', '球場', '觀眾人數', '最高氣溫(C)', '降雨量(mm)', '降雨機率(%)', '主題日', '啦啦隊', '勝率'];
+    const csvRows = [headers.join(',')];
+    
+    chartData.forEach(game => {
+      const row = [
+        game.Date,
+        game.HomeTeam,
+        game.AwayTeam,
+        game.Stadium,
+        game.Audience || 0,
+        game['MaxTemp(C)'] || 0,
+        game['Rainfall(mm)'] || 0,
+        game['RainProb(%)'] || '',
+        `"${game.Theme || ''}"`,
+        `"${game.Cheerleaders || ''}"`,
+        game.WinRate !== undefined ? game.WinRate : ''
+      ];
+      csvRows.push(row.join(','));
+    });
+    
+    const csvContent = "\uFEFF" + csvRows.join('\n'); // Add BOM for Excel
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `CPBL_Data_${selectedOption}_${startYear}-${endYear}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleForceRefresh = async () => {
+    if (!gasUrl) return;
+    setLoading(true);
+    
+    // Clear cache
+    if ('caches' in window) {
+      try {
+        await caches.delete('cpbl-gas-cache-v1');
+      } catch (e) {
+        console.error("Failed to delete cache", e);
+      }
+    }
+    
+    try {
+      const url = `${gasUrl}${gasUrl.includes('?') ? '&' : '?'}mode=all&forceRefresh=${Date.now()}`;
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) throw new Error('Network response was not ok');
+      const data = await response.json();
+      
+      // Update cache
+      if ('caches' in window) {
+        try {
+          const cache = await caches.open('cpbl-gas-cache-v1');
+          await cache.put(gasUrl + '_all', new Response(JSON.stringify(data)));
+        } catch (e) {
+          console.error("Failed to re-cache", e);
+        }
+      }
+      
+      const isInitialRender = false;
+      
+      const flatData = Object.values(data).flat() as any[];
+      const processedData = flatData.map(item => {
+        let homeTeam = item.HomeTeam || item['主場'];
+        let awayTeam = item.AwayTeam || item['客場'];
+        let stadium = item.Stadium || item['球場'];
+
+        const rawMatch = item.Matchup || item['對戰組合'] || '';
+        
+        if (rawMatch && (!homeTeam || !awayTeam || !stadium)) {
+          const matchResult = rawMatch.match(/^(.+?)\s+v\.s\.\s+(.+?)\s+@(.+)$/);
+          if (matchResult) {
+            if (!awayTeam) awayTeam = matchResult[1].trim();
+            if (!homeTeam) homeTeam = matchResult[2].trim();
+            if (!stadium) stadium = matchResult[3].trim();
+          }
+        }
+        
+        ['味全', '兄弟', '中信', '統一', '樂天', '台鋼', '富邦'].forEach(keyword => {
+          if (homeTeam && homeTeam.includes(keyword)) {
+            if (keyword === '味全') homeTeam = '味全龍';
+            if (keyword === '兄弟' || keyword === '中信') homeTeam = '中信兄弟';
+            if (keyword === '統一') homeTeam = '統一7-ELEVEn獅';
+            if (keyword === '樂天') homeTeam = '樂天桃猿';
+            if (keyword === '台鋼') homeTeam = '台鋼雄鷹';
+            if (keyword === '富邦') homeTeam = '富邦悍將';
+          }
+          if (awayTeam && awayTeam.includes(keyword)) {
+            if (keyword === '味全') awayTeam = '味全龍';
+            if (keyword === '兄弟' || keyword === '中信') awayTeam = '中信兄弟';
+            if (keyword === '統一') awayTeam = '統一7-ELEVEn獅';
+            if (keyword === '樂天') awayTeam = '樂天桃猿';
+            if (keyword === '台鋼') awayTeam = '台鋼雄鷹';
+            if (keyword === '富邦') awayTeam = '富邦悍將';
+          }
+        });
+
+        // Also resolve WinRate from igMapping logic or other objects if necessary
+        // For simplicity, we just use the existing fallback
+        let winRateInfo;
+        if (data.winRates) {
+           winRateInfo = data.winRates.find((w: any) => {
+             const cleanH = homeTeam.replace(/[^一-龥]/g, '');
+             const cleanW = (w['球隊'] || '').replace(/[^一-龥]/g, '');
+             return (cleanH.includes('中信') && cleanW.includes('中信')) ||
+                    (cleanH.includes('兄弟') && cleanW.includes('中信')) ||
+                    (cleanH.includes('味全') && cleanW.includes('味全')) ||
+                    (cleanH.includes('統一') && cleanW.includes('統一')) ||
+                    (cleanH.includes('樂天') && cleanW.includes('樂天')) ||
+                    (cleanH.includes('富邦') && cleanW.includes('富邦')) ||
+                    (cleanH.includes('台鋼') && cleanW.includes('台鋼'));
+           });
+        }
+
+        return {
+          ...item,
+          HomeTeam: homeTeam,
+          AwayTeam: awayTeam,
+          Stadium: stadium,
+          Audience: Number(item.Audience) || 0,
+          'MaxTemp(C)': Number(item['MaxTemp(C)']) || 0,
+          'Rainfall(mm)': Number(item['Rainfall(mm)']) || 0,
+          'RainProb(%)': item['RainProb(%)'] !== undefined && item['RainProb(%)'] !== '' ? Number(item['RainProb(%)']) : undefined,
+          Theme: item.Theme || item['主題日'] || '',
+          Url: item.Url || item.URL || item['連結'] || '',
+          Cheerleaders: item.Cheerleaders || item['啦啦隊'] || item['啦啦隊班表'] || '',
+          WinRate: winRateInfo && winRateInfo['勝率'] ? Number(winRateInfo['勝率']) : undefined,
+          Rank: winRateInfo && winRateInfo['排名'] ? Number(winRateInfo['排名']) : undefined,
+        };
+      });
+      
+      setRawData(processedData);
+      setLastUpdated(new Date());
+    } catch (err: any) {
+      console.error(err);
+      let errorMessage = '發生未預期的錯誤。';
+      if (err instanceof Error) errorMessage = `錯誤: ${err.message}`;
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -799,16 +982,29 @@ export default function App() {
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 ${darkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-gray-50 text-gray-900'}`}>
       {/* Header */}
-      <header className="bg-blue-700 dark:bg-slate-800 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-10 transition-colors duration-300">
+      <header className="bg-blue-700 dark:bg-slate-800 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-30 transition-colors duration-300">
         <div className="flex items-center gap-2">
           <BarChart2 className="w-6 h-6" />
           <h1 className="text-xl font-bold">中職票房分析</h1>
+          {lastUpdated && (
+            <span className="hidden sm:inline-block ml-4 text-xs text-blue-200 dark:text-slate-400">
+              最後更新: {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button 
+            onClick={handleForceRefresh}
+            disabled={loading}
+            className={`p-2 hover:bg-blue-600 dark:hover:bg-slate-700 rounded-full transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title="強制重新抓取資料"
+          >
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button 
             onClick={() => setDarkMode(!darkMode)}
             className="p-2 hover:bg-blue-600 dark:hover:bg-slate-700 rounded-full transition-colors"
-            aria-label="切換深色模式"
+            title="切換深色模式"
           >
             {darkMode ? (
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -819,7 +1015,7 @@ export default function App() {
           <button 
             onClick={() => setShowSettings(!showSettings)}
             className="p-2 hover:bg-blue-600 dark:hover:bg-slate-700 rounded-full transition-colors"
-            aria-label="設定"
+            title="設定"
           >
             <Settings className="w-5 h-5" />
           </button>
@@ -828,7 +1024,7 @@ export default function App() {
 
       {/* Settings Panel */}
       {showSettings && (
-        <div className="bg-white dark:bg-slate-800 p-4 shadow-md border-b border-gray-200 dark:border-slate-700 animate-in slide-in-from-top-2">
+        <div className="bg-white dark:bg-slate-800 p-4 shadow-md border-b border-gray-200 dark:border-slate-700 animate-in slide-in-from-top-2 relative z-20">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             GAS Web App URL (留空則使用測試資料)
           </label>
@@ -862,8 +1058,22 @@ export default function App() {
           </div>
         ) : (
           <>
+            {/* Mobile Filter Toggle */}
+            <div className="md:hidden flex items-center justify-between bg-white dark:bg-slate-800 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+              <span className="text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <Filter className="w-4 h-4" /> 
+                篩選條件 / 分析選項
+              </span>
+              <button 
+                onClick={() => setIsFiltersOpen(!isFiltersOpen)} 
+                className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-medium rounded-lg text-sm"
+              >
+                {isFiltersOpen ? '收起' : '展開'}
+              </button>
+            </div>
+
             {/* Controls */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className={`${isFiltersOpen ? 'grid' : 'hidden'} md:grid bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-in fade-in`}>
           <div className="space-y-1">
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">分析維度</label>
             <select
@@ -1057,10 +1267,21 @@ export default function App() {
           <button
             onClick={() => setSortMode('winRateDesc')}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              sortMode === 'winRateDesc' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 dark:text-gray-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
+              sortMode === 'winRateDesc' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
             }`}
           >
             <Trophy className="w-4 h-4" /> 年度勝率由高到低
+          </button>
+
+          <div className="flex-1"></div>
+          <button
+            onClick={exportToCSV}
+            disabled={chartData.length === 0}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              chartData.length === 0 ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-500' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+            }`}
+          >
+            <Download className="w-4 h-4" /> 下載清單 (CSV)
           </button>
         </div>
 
