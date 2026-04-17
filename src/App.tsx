@@ -431,6 +431,9 @@ export default function App() {
                            selectedWinRateFilter === '<0.5' ? (game.WinRate !== undefined && game.WinRate < 0.5) : true;
       if (!matchWinRate) return false;
 
+      // Filter out games with 0 audience (assuming unplayed games)
+      if (game.Audience === 0) return false;
+
       return true;
     });
 
