@@ -199,12 +199,12 @@ export default function App() {
         const years = Array.from(new Set(processedData.map(d => d.Date ? d.Date.split('/')[0] : '').filter(Boolean))).sort();
         if (years.length > 0) {
           const latestYear = years[years.length - 1];
-          const startIdx = Math.max(0, years.length - 2);
+          const startIdx = Math.max(0, years.length - 3);
           setStartYear(years[startIdx]);
           setEndYear(latestYear);
         }
 
-        const activeTeams = ['中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將', '台鋼雄鷹'];
+        const activeTeams = ['台鋼雄鷹', '中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將'];
         const allHomeTeams = new Set(processedData.map(d => d.HomeTeam).filter(Boolean));
         let defaultTeam = '';
         for (const t of activeTeams) {
@@ -235,12 +235,13 @@ export default function App() {
           setLoading(false);
         } else {
           let hasRenderedFromCache = false;
+          let hasRenderedRecent = false;
           let isInitialRender = isFirstLoad;
           
           if ('caches' in window) {
             try {
               const cache = await caches.open(CACHE_NAME);
-              const cachedResponse = await cache.match(gasUrl);
+              const cachedResponse = await cache.match(gasUrl + '_all');
               if (cachedResponse) {
                 const cachedData = await cachedResponse.json();
                 processData(JSON.parse(JSON.stringify(cachedData)), isInitialRender);
@@ -251,27 +252,45 @@ export default function App() {
             } catch (cacheErr) {}
           }
 
-          fetch(`${gasUrl}${gasUrl.includes('?') ? '&' : '?'}t=${new Date().getTime()}`, {
-            cache: 'no-store'
-          })
+          if (!hasRenderedFromCache) {
+            // Fetch recent 2 years block first for fast load
+            try {
+              const recentUrl = `${gasUrl}${gasUrl.includes('?') ? '&' : '?'}mode=recent&t=${new Date().getTime()}`;
+              const recentRes = await fetch(recentUrl, { cache: 'no-store' });
+              if (recentRes.ok) {
+                const recentData = await recentRes.json();
+                if (!isMounted) return;
+                processData(JSON.parse(JSON.stringify(recentData)), isInitialRender);
+                setLoading(false);
+                isInitialRender = false;
+                hasRenderedRecent = true;
+              }
+            } catch (err) {
+              console.warn("Failed to fetch recent data block, falling back to full fetch", err);
+            }
+          }
+
+          // Fetch all data in the background
+          const allUrl = `${gasUrl}${gasUrl.includes('?') ? '&' : '?'}mode=all&t=${new Date().getTime()}`;
+          fetch(allUrl, { cache: 'no-store' })
           .then(async (response) => {
             if (!response.ok) throw new Error('Network response was not ok');
             const data = await response.json();
             
             if ('caches' in window) {
               const cache = await caches.open(CACHE_NAME);
-              cache.put(gasUrl, new Response(JSON.stringify(data)));
+              cache.put(gasUrl + '_all', new Response(JSON.stringify(data)));
             }
 
             if (!isMounted) return;
             processData(JSON.parse(JSON.stringify(data)), isInitialRender);
-            if (!hasRenderedFromCache) {
+            if (!hasRenderedFromCache && !hasRenderedRecent) {
               setLoading(false);
             }
           })
           .catch(err => {
             if (!isMounted) return;
-            if (!hasRenderedFromCache) {
+            if (!hasRenderedFromCache && !hasRenderedRecent) {
               let errorMessage = '無法載入資料，請檢查網址或網路連線。';
               if (err.message === 'Failed to fetch') {
                 errorMessage = '取得資料失敗 (Failed to fetch)。請確認：\n1. GAS 網址是否正確\n2. GAS 部署時「誰可以存取」是否設定為「所有人 (Anyone)」\n3. 網址是否支援跨域請求 (CORS)';
@@ -282,7 +301,7 @@ export default function App() {
               console.error(err);
               setLoading(false);
             } else {
-              console.error('Background fetch failed, but cached data is available:', err);
+              console.error('Background fetch failed, but partial/cached data is available:', err);
             }
           });
         }
@@ -312,7 +331,7 @@ export default function App() {
     
     if (!sortedOptions.includes(selectedOption) && sortedOptions.length > 0) {
       if (viewMode === 'homeTeam') {
-        const activeTeams = ['中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將', '台鋼雄鷹'];
+        const activeTeams = ['台鋼雄鷹', '中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將'];
         const foundActive = activeTeams.find(t => sortedOptions.includes(t));
         setSelectedOption(foundActive || sortedOptions[0]);
       } else {
