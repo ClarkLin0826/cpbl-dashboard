@@ -12,7 +12,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { generateMockData, GameData } from './mockData';
-import { Settings, BarChart2, CloudRain, Thermometer, Users, X, ExternalLink, Trophy, Calendar, Download, RefreshCw, Filter, Share2, Check } from 'lucide-react';
+import { Settings, BarChart2, CloudRain, Thermometer, Users, X, ExternalLink, Trophy, Calendar, Download, RefreshCw, Filter, Share2, Check, TrendingUp, TrendingDown } from 'lucide-react';
 
 ChartJS.register(
   CategoryScale,
@@ -56,6 +56,7 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [chartType, setChartType] = useState<'trend' | 'yoy'>('trend');
 
   const handleShare = async () => {
     try {
@@ -577,6 +578,76 @@ export default function App() {
 
     return filtered;
   }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameResult, showNextWeek]);
+
+  const dataForYoY = useMemo(() => {
+    return rawData.filter(game => {
+      if (!game.Date) return false;
+      if (showNextWeek) return false; // YoY doesn't apply to future weeks
+
+      if (viewMode !== 'matchup') {
+        const matchView = viewMode === 'homeTeam' ? game.HomeTeam === selectedOption : game.Stadium === selectedOption;
+        if (!matchView) return false;
+      }
+
+      const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
+      if (!matchStadium) return false;
+
+      const dayOfWeekMap = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+      const dayStr = dayOfWeekMap[new Date(game.Date).getDay()];
+      if (selectedDayOfWeek !== 'All' && dayStr !== selectedDayOfWeek) return false;
+
+      const matchTheme = selectedThemeFilter === 'All' ? true :
+                         selectedThemeFilter === 'ThemeOnly' ? !!game.Theme :
+                         !game.Theme;
+      if (!matchTheme) return false;
+
+      const matchCheerleader = selectedCheerleader === 'All' || 
+                               (game.Cheerleaders && game.Cheerleaders.split(/[,、]/).map(c => c.trim()).includes(selectedCheerleader));
+      if (!matchCheerleader) return false;
+
+      const matchGameResult = selectedGameResult === 'All' ? true :
+                              selectedGameResult === 'W' ? game.HomeResult === '勝' :
+                              selectedGameResult === 'L' ? game.HomeResult === '敗' :
+                              selectedGameResult === 'T' ? game.HomeResult === '和' : true;
+      if (!matchGameResult) return false;
+
+      if (game.Audience === 0) return false;
+
+      return true;
+    });
+  }, [rawData, viewMode, selectedOption, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameResult, showNextWeek]);
+
+  const yearlyStats = useMemo(() => {
+    if (dataForYoY.length === 0) return [];
+    
+    const grouped = new Map<string, { total: number, count: number }>();
+    dataForYoY.forEach(game => {
+      const yearStr = game.Date.split('/')[0];
+      if (!grouped.has(yearStr)) grouped.set(yearStr, { total: 0, count: 0 });
+      const stat = grouped.get(yearStr)!;
+      stat.total += game.Audience;
+      stat.count += 1;
+    });
+    
+    const results = Array.from(grouped.entries()).map(([year, val]) => ({
+      year,
+      total: val.total,
+      count: val.count,
+      avg: Math.round(val.total / val.count)
+    })).sort((a, b) => a.year.localeCompare(b.year));
+
+    return results.map((stat, i, arr) => {
+      let growth: number | null = null;
+      if (i > 0) {
+        const prevYearStr = String(Number(stat.year) - 1);
+        const prevStat = arr.find(s => s.year === prevYearStr);
+        if (prevStat && prevStat.avg > 0) {
+          growth = ((stat.avg - prevStat.avg) / prevStat.avg) * 100;
+        }
+      }
+      return { ...stat, growth };
+    });
+  }, [dataForYoY]);
 
   const maxTemp = chartData.length > 0 ? Math.max(...chartData.map(d => d['MaxTemp(C)'])) : null;
   const maxRain = chartData.length > 0 ? Math.max(...chartData.map(d => d['Rainfall(mm)'])) : null;
@@ -1304,12 +1375,30 @@ export default function App() {
         {/* Chart Area */}
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 min-h-[400px] flex flex-col">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-              {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : `${selectedOption} - 人數趨勢`}
-              {loading && <span className="text-sm font-normal text-gray-400 animate-pulse">載入中...</span>}
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : `${selectedOption} - 人數趨勢`}
+                {loading && <span className="text-sm font-normal text-gray-400 animate-pulse">載入中...</span>}
+              </h2>
+              {!showNextWeek && viewMode !== 'matchup' && chartData.length > 0 && (
+                <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
+                  <button
+                    onClick={() => setChartType('trend')}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${chartType === 'trend' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                  >
+                    每日趨勢
+                  </button>
+                  <button
+                    onClick={() => setChartType('yoy')}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${chartType === 'yoy' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                  >
+                    年度比較
+                  </button>
+                </div>
+              )}
+            </div>
             
-            {!loading && chartData.length > 0 && !showNextWeek && (
+            {!loading && chartData.length > 0 && !showNextWeek && chartType === 'trend' && (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:flex lg:flex-nowrap gap-3 items-stretch w-full md:w-auto mt-2 md:mt-0">
                 {/* 總場次 */}
                 <div className="col-span-1 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-2 flex flex-col items-start shadow-sm transition-transform hover:-translate-y-0.5">
@@ -1372,74 +1461,91 @@ export default function App() {
               <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-1">找不到符合的賽事資料</p>
               <p className="text-sm text-gray-400">目前設定的篩選條件太嚴格，請嘗試放寬年份、星期或主題日限制。</p>
             </div>
-          ) : viewMode === 'matchup' ? (
-            <div className="flex flex-col flex-1 w-full bg-white p-4 rounded-xl border border-gray-100 shadow-sm mt-4 overflow-x-auto">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 text-center">對戰組合場均人數矩陣 (Heatmap)</h3>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 flex justify-end items-center gap-2">
-                <span>圖例顏色深淺代表平均人數多寡（顏色越橘越多人）</span>
+          ) : chartType === 'yoy' ? (
+            <div className="flex flex-col flex-1 w-full bg-white dark:bg-slate-800 p-2 md:p-6 mb-2">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-8 text-center">歷年場均人數與成長率</h3>
+              
+              {/* CSS Bar Chart */}
+              <div className="w-full overflow-x-auto custom-scrollbar pb-6">
+                <div className="flex items-end justify-start sm:justify-center gap-4 sm:gap-10 h-64 min-w-max px-4 mb-4 pt-8 border-b-2 border-gray-100 dark:border-slate-700 relative">
+                   {/* Y-axis labels simplified */}
+                   <div className="hidden sm:flex absolute left-0 top-0 h-full flex-col justify-between text-xs text-gray-400 -ml-2 -mt-2 sticky left-0 z-20 bg-white dark:bg-slate-800 bg-opacity-90 pr-2">
+                      <span>{Math.max(...yearlyStats.map(s => s.avg)).toLocaleString()}</span>
+                      <span>0</span>
+                   </div>
+                   {yearlyStats.map((stat, idx) => {
+                      const maxAvg = Math.max(...yearlyStats.map(s => s.avg));
+                      const heightPercent = maxAvg > 0 ? (stat.avg / maxAvg) * 100 : 0;
+                      return (
+                        <div key={stat.year} className="flex flex-col justify-end items-center gap-2 group relative w-12 sm:w-16 md:w-20 h-full shrink-0">
+                         {/* Tooltip visible on hover inside the bar area */}
+                         <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 text-xs py-1.5 px-3 rounded shadow-lg pointer-events-none whitespace-nowrap z-10 flex flex-col items-center">
+                            <span className="font-bold text-sm tracking-wide">{stat.avg.toLocaleString()} 人</span>
+                            {stat.growth !== null && (
+                              <span className={`text-[10px] mt-0.5 font-medium ${stat.growth > 0 ? 'text-emerald-400 dark:text-emerald-600' : stat.growth < 0 ? 'text-red-400 dark:text-red-500' : 'text-gray-300 dark:text-gray-600'}`}>
+                                {stat.growth > 0 ? '+' : ''}{stat.growth.toFixed(1)}% YoY
+                              </span>
+                            )}
+                         </div>
+                         
+                         {/* Bar */}
+                         <div className="w-full flex-1 flex flex-col justify-end relative">
+                           <div 
+                             className="w-full bg-gradient-to-t from-blue-600 to-cyan-400 dark:from-blue-700 dark:to-cyan-500 rounded-t-lg transition-all duration-500 ease-out group-hover:brightness-110 shadow-sm relative overflow-hidden" 
+                             style={{ height: `${Math.max(2, heightPercent)}%` }}
+                           >
+                              <div className="absolute inset-0 bg-white/10 group-hover:bg-white/20 transition-colors"></div>
+                           </div>
+                         </div>
+                         
+                         {/* X-axis Label */}
+                         <span className="text-sm font-bold text-slate-600 dark:text-slate-300 mt-2">{stat.year}</span>
+                      </div>
+                    )
+                 })}
+                </div>
               </div>
-              <table className="w-full text-center border-collapse text-sm min-w-[600px]">
-                <thead>
-                  <tr>
-                    <th className="p-3 border border-gray-200 bg-slate-50 dark:bg-slate-900/50 text-slate-600 font-semibold w-24 whitespace-nowrap">
-                      主場 \ 客場
-                    </th>
-                    {Array.from(new Set([...chartData.map(d=>d.HomeTeam), ...chartData.map(d=>d.AwayTeam)])).filter(Boolean).sort().map(team => (
-                      <th key={`col-${team}`} className="p-3 border border-gray-200 bg-slate-50 dark:bg-slate-900/50 text-slate-700 font-medium">
-                        {team}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.from(new Set(chartData.map(d=>d.HomeTeam))).filter(Boolean).sort().map(home => {
-                    const allTeams = Array.from(new Set([...chartData.map(d=>d.HomeTeam), ...chartData.map(d=>d.AwayTeam)])).filter(Boolean).sort();
-                    
-                    let maxAvg = 1;
-                    chartData.forEach(d => maxAvg = Math.max(maxAvg, d.Audience)); // Simplified max bound for coloring
-                    const absoluteMaxAvg = 15000; // Cap at 15k for color scaling
 
-                    return (
-                      <tr key={`row-${home}`}>
-                        <td className="p-3 border border-gray-200 bg-slate-50 dark:bg-slate-900/50 font-semibold text-slate-700 whitespace-nowrap">
-                          {home} <span className="text-xs text-slate-400 font-normal">(主)</span>
-                        </td>
-                        {allTeams.map(away => {
-                          if (home === away) {
-                            return <td key={`cell-${home}-${away}`} className="p-3 border border-gray-200 bg-gray-100 dark:bg-slate-700 text-gray-300">-</td>;
-                          }
-                          const matchGames = chartData.filter(d => d.HomeTeam === home && d.AwayTeam === away);
-                          if (matchGames.length === 0) {
-                            return <td key={`cell-${home}-${away}`} className="p-3 border border-gray-200 text-gray-300">-</td>;
-                          }
-                          const avg = Math.round(matchGames.reduce((acc, curr) => acc + curr.Audience, 0) / matchGames.length);
-                          
-                          // Color mapping
-                          const intensity = Math.min(1, avg / absoluteMaxAvg);
-                          // From white(0) to orange(1): #fff to #f97316
-                          const r = Math.round(255 - (255 - 249) * intensity);
-                          const g = Math.round(255 - (255 - 115) * intensity);
-                          const b = Math.round(255 - (255 - 22) * intensity);
-                          const bgColor = `rgba(${r}, ${g}, ${b}, ${0.1 + intensity * 0.9})`;
-                          const textColor = intensity > 0.6 ? '#fff' : '#1e293b';
-
-                          return (
-                            <td key={`cell-${home}-${away}`} className="border border-gray-200 transition-colors hover:ring-2 hover:ring-inset hover:ring-blue-500 cursor-default" style={{ backgroundColor: bgColor, color: textColor }}>
-                              <div className="flex flex-col items-center justify-center p-2">
-                                <span className="font-bold text-[15px]">{avg.toLocaleString()}</span>
-                                <span className="text-[10px] opacity-75 mt-0.5">({matchGames.length}場)</span>
-                              </div>
-                            </td>
-                          );
-                        })}
+              {/* Data Table */}
+              <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700 mx-auto w-full max-w-4xl shadow-sm">
+                 <table className="w-full text-center text-sm table-fixed">
+                    <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
+                      <tr>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700">年度</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700">總場次</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700">總數</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700">場均人數</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700">年度成長率 (YoY)</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="mt-4 text-xs text-center text-gray-400">
-                註：左側縱軸為主場球隊，上方橫軸為客場球隊。<br/>
-                格子內數字為「場均觀眾數」，下方小括號表示符合條件的有效賽事總場次。
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 bg-white dark:bg-slate-800">
+                      {[...yearlyStats].reverse().map(stat => (
+                        <tr key={stat.year} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                          <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200">{stat.year}</td>
+                          <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{stat.count} 場</td>
+                          <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{stat.total.toLocaleString()}</td>
+                          <td className="py-3 px-4 text-blue-600 dark:text-blue-400 font-bold text-base">{stat.avg.toLocaleString()}</td>
+                          <td className="py-3 px-4 font-medium">
+                            {stat.growth !== null ? (
+                               stat.growth > 0 ? (
+                                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1 bg-emerald-50 dark:bg-emerald-900/20 py-1 px-2 rounded-full w-24 mx-auto">
+                                    <TrendingUp className="w-4 h-4" /> +{stat.growth.toFixed(1)}%
+                                  </span>
+                               ) : stat.growth < 0 ? (
+                                  <span className="text-red-500 dark:text-red-400 flex items-center justify-center gap-1 bg-red-50 dark:bg-red-900/20 py-1 px-2 rounded-full w-24 mx-auto">
+                                    <TrendingDown className="w-4 h-4" /> {stat.growth.toFixed(1)}%
+                                  </span>
+                               ) : (
+                                  <span className="text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 py-1 px-2 rounded-full w-24 mx-auto block">-</span>
+                               )
+                            ) : (
+                               <span className="text-slate-400 dark:text-slate-500 text-xs">無前期資料</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                 </table>
               </div>
             </div>
           ) : (
@@ -1459,7 +1565,7 @@ export default function App() {
                     </div>
                   </div>
                 </>
-              ) : (
+              ) : chartType === 'trend' ? (
                 <div className="flex items-center justify-center p-10 mt-10 rounded-xl bg-fuchsia-50/50 dark:bg-slate-900 border border-fuchsia-100 dark:border-slate-800">
                   <div className="text-center space-y-4 max-w-sm">
                     <Calendar className="w-16 h-16 text-fuchsia-400 dark:text-fuchsia-600 mx-auto" />
@@ -1469,13 +1575,13 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
           )}
         </div>
 
         {/* Data Grid Area */}
-        {!loading && chartData.length > 0 && viewMode !== 'matchup' && (
+        {!loading && chartData.length > 0 && viewMode !== 'matchup' && chartType === 'trend' && (
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col mt-4">
             <div className="p-4 border-b border-gray-100 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center">
               <h2 className="text-sm font-bold text-gray-700 dark:text-gray-300">詳細數據清單</h2>
