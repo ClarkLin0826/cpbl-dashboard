@@ -406,11 +406,13 @@ export default function App() {
 
   // Extract available stadiums for the selected team
   const availableStadiumsForTeam = useMemo(() => {
-    if (viewMode !== 'homeTeam' || !selectedOption) return ['All'];
+    if (viewMode === 'stadium') return ['All']; // If we are primarily selecting a stadium, the stadium combobox doesn't need to show everything twice
+    if (viewMode === 'homeTeam' && !selectedOption) return ['All'];
+    
     const stadiums = new Set<string>();
     
     rawData.forEach(game => {
-      if (game.HomeTeam !== selectedOption) return;
+      if (viewMode === 'homeTeam' && game.HomeTeam !== selectedOption) return;
       if (!game.Date) return;
       
       const gameDate = new Date(game.Date);
@@ -509,7 +511,7 @@ export default function App() {
         if (!matchView) return false;
       }
 
-      const matchStadium = viewMode === 'homeTeam' ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
+      const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
       if (!matchStadium) return false;
 
       const dayOfWeekMap = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -1146,7 +1148,7 @@ export default function App() {
             </div>
           </div>
 
-          {viewMode === 'homeTeam' && (
+          {(viewMode === 'homeTeam' || viewMode === 'matchup') && (
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">選擇球場</label>
               <select
