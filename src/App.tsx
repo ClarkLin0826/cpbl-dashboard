@@ -1377,7 +1377,7 @@ export default function App() {
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : `${selectedOption} - 人數趨勢`}
+                {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : viewMode === 'matchup' ? '對戰組合場均人數矩陣 (Heatmap)' : `${selectedOption} - 人數趨勢`}
                 {loading && <span className="text-sm font-normal text-gray-400 animate-pulse">載入中...</span>}
               </h2>
               {!showNextWeek && viewMode !== 'matchup' && chartData.length > 0 && (
@@ -1461,13 +1461,93 @@ export default function App() {
               <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-1">找不到符合的賽事資料</p>
               <p className="text-sm text-gray-400">目前設定的篩選條件太嚴格，請嘗試放寬年份、星期或主題日限制。</p>
             </div>
+          ) : viewMode === 'matchup' ? (
+            <div className="flex flex-col flex-1 w-full bg-white p-4 rounded-xl border border-gray-100 shadow-sm mt-4 overflow-x-auto">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 text-center">對戰組合場均人數矩陣 (Heatmap)</h3>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 flex justify-end items-center gap-2">
+                <span>圖例顏色深淺代表平均人數多寡（顏色越橘越多人）</span>
+              </div>
+              <table className="w-full text-center border-collapse text-sm min-w-[600px]">
+                <thead>
+                  <tr>
+                    <th className="p-3 border border-gray-200 bg-slate-50 dark:bg-slate-900/50 text-slate-600 font-semibold w-24 whitespace-nowrap">
+                      主場 \ 客場
+                    </th>
+                    {Array.from(new Set([...chartData.map(d=>d.HomeTeam), ...chartData.map(d=>d.AwayTeam)])).filter(Boolean).sort().map(team => (
+                      <th key={`col-${team}`} className="p-3 border border-gray-200 bg-slate-50 dark:bg-slate-900/50 text-slate-700 font-medium">
+                        {team}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from(new Set(chartData.map(d=>d.HomeTeam))).filter(Boolean).sort().map(home => {
+                    const allTeams = Array.from(new Set([...chartData.map(d=>d.HomeTeam), ...chartData.map(d=>d.AwayTeam)])).filter(Boolean).sort();
+                    
+                    let maxAvg = 1;
+                    chartData.forEach(d => maxAvg = Math.max(maxAvg, d.Audience)); // Simplified max bound for coloring
+                    const absoluteMaxAvg = 15000; // Cap at 15k for color scaling
+
+                    return (
+                      <tr key={`row-${home}`}>
+                        <td className="p-3 border border-gray-200 bg-slate-50 dark:bg-slate-900/50 font-semibold text-slate-700 whitespace-nowrap">
+                          {home} <span className="text-xs text-slate-400 font-normal">(主)</span>
+                        </td>
+                        {allTeams.map(away => {
+                          if (home === away) {
+                            return <td key={`cell-${home}-${away}`} className="p-3 border border-gray-200 bg-gray-100 dark:bg-slate-700 text-gray-300">-</td>;
+                          }
+                          const matchGames = chartData.filter(d => d.HomeTeam === home && d.AwayTeam === away);
+                          if (matchGames.length === 0) {
+                            return <td key={`cell-${home}-${away}`} className="p-3 border border-gray-200 text-gray-300">-</td>;
+                          }
+                          const avg = Math.round(matchGames.reduce((acc, curr) => acc + curr.Audience, 0) / matchGames.length);
+                          
+                          // Color mapping
+                          const intensity = Math.min(1, avg / absoluteMaxAvg);
+                          // From white(0) to orange(1): #fff to #f97316
+                          const r = Math.round(255 - (255 - 249) * intensity);
+                          const g = Math.round(255 - (255 - 115) * intensity);
+                          const b = Math.round(255 - (255 - 22) * intensity);
+                          const bgColor = `rgba(${r}, ${g}, ${b}, ${0.1 + intensity * 0.9})`;
+                          const textColor = intensity > 0.6 ? '#fff' : '#1e293b';
+
+                          return (
+                            <td key={`cell-${home}-${away}`} className="border border-gray-200 transition-colors hover:ring-2 hover:ring-inset hover:ring-blue-500 cursor-default" style={{ backgroundColor: bgColor, color: textColor }}>
+                              <div className="flex flex-col items-center justify-center p-2">
+                                <span className="font-bold text-[15px]">{avg.toLocaleString()}</span>
+                                <span className="text-[10px] opacity-75 mt-0.5">({matchGames.length}場)</span>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className="mt-4 text-xs text-center text-gray-400">
+                註：左側縱軸為主場球隊，上方橫軸為客場球隊。<br/>
+                格子內數字為「場均觀眾數」，下方小括號表示符合條件的有效賽事總場次。
+              </div>
+            </div>
+          ) : showNextWeek ? (
+            <div className="flex items-center justify-center p-10 mt-10 rounded-xl bg-fuchsia-50/50 dark:bg-slate-900 border border-fuchsia-100 dark:border-slate-800">
+              <div className="text-center space-y-4 max-w-sm">
+                <Calendar className="w-16 h-16 text-fuchsia-400 dark:text-fuchsia-600 mx-auto" />
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">未來一週天氣與賽程</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">下方清單已為您篩選出未來七天的賽程，請往下捲動查閱詳細的啦啦隊班表與降雨機率預報。</p>
+                </div>
+              </div>
+            </div>
           ) : chartType === 'yoy' ? (
             <div className="flex flex-col flex-1 w-full bg-white dark:bg-slate-800 p-2 md:p-6 mb-2">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-8 text-center">歷年場均人數與成長率</h3>
               
               {/* CSS Bar Chart */}
-              <div className="w-full overflow-x-auto custom-scrollbar pb-6">
-                <div className="flex items-end justify-start sm:justify-center gap-4 sm:gap-10 h-64 min-w-max px-4 mb-4 pt-8 border-b-2 border-gray-100 dark:border-slate-700 relative">
+              <div className="w-full overflow-x-auto custom-scrollbar pb-6 pt-16 mt-2">
+                <div className="flex items-end justify-start sm:justify-center gap-4 sm:gap-10 h-64 min-w-max px-4 mb-4 border-b-2 border-gray-100 dark:border-slate-700 relative">
                    {/* Y-axis labels simplified */}
                    <div className="hidden sm:flex absolute left-0 top-0 h-full flex-col justify-between text-xs text-gray-400 -ml-2 -mt-2 sticky left-0 z-20 bg-white dark:bg-slate-800 bg-opacity-90 pr-2">
                       <span>{Math.max(...yearlyStats.map(s => s.avg)).toLocaleString()}</span>
@@ -1479,7 +1559,7 @@ export default function App() {
                       return (
                         <div key={stat.year} className="flex flex-col justify-end items-center gap-2 group relative w-12 sm:w-16 md:w-20 h-full shrink-0">
                          {/* Tooltip visible on hover inside the bar area */}
-                         <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 text-xs py-1.5 px-3 rounded shadow-lg pointer-events-none whitespace-nowrap z-10 flex flex-col items-center">
+                         <div className="absolute -top-16 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 text-xs py-1.5 px-3 rounded shadow-lg pointer-events-none whitespace-nowrap z-10 flex flex-col items-center">
                             <span className="font-bold text-sm tracking-wide">{stat.avg.toLocaleString()} 人</span>
                             {stat.growth !== null && (
                               <span className={`text-[10px] mt-0.5 font-medium ${stat.growth > 0 ? 'text-emerald-400 dark:text-emerald-600' : stat.growth < 0 ? 'text-red-400 dark:text-red-500' : 'text-gray-300 dark:text-gray-600'}`}>
@@ -1537,7 +1617,7 @@ export default function App() {
                                   </span>
                                ) : (
                                   <span className="text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 py-1 px-2 rounded-full w-24 mx-auto block">-</span>
-                               )
+                                )
                             ) : (
                                <span className="text-slate-400 dark:text-slate-500 text-xs">無前期資料</span>
                             )}
@@ -1550,32 +1630,18 @@ export default function App() {
             </div>
           ) : (
             <div className="flex flex-col flex-1 w-full">
-              {!showNextWeek ? (
-                <>
-                  <div className="flex flex-wrap items-center gap-4 mb-4 text-xs text-gray-600 dark:text-gray-300">
-                    <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-[#3b82f6] border-2 border-white mr-1.5 shadow-sm"></span>一般場次</div>
-                    <div className="flex items-center"><span className="w-4 h-4 rounded-full bg-[#f59e0b] border-[3px] border-[#fef3c7] mr-1.5 shadow-sm"></span>主題日</div>
-                    <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#ef4444] border-2 border-white mr-1.5 shadow-sm"></span>最高氣溫</div>
-                    <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#06b6d4] border-2 border-white mr-1.5 shadow-sm"></span>最高降雨量</div>
-                    <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#a855f7] border-2 border-white mr-1.5 shadow-sm"></span>最高溫且最高降雨</div>
-                  </div>
-                  <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
-                    <div className="relative h-[300px] md:h-[400px]" style={{ width: safeChartWidth }}>
-                      <Line options={chartOptions} data={chartJsData} />
-                    </div>
-                  </div>
-                </>
-              ) : chartType === 'trend' ? (
-                <div className="flex items-center justify-center p-10 mt-10 rounded-xl bg-fuchsia-50/50 dark:bg-slate-900 border border-fuchsia-100 dark:border-slate-800">
-                  <div className="text-center space-y-4 max-w-sm">
-                    <Calendar className="w-16 h-16 text-fuchsia-400 dark:text-fuchsia-600 mx-auto" />
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">未來一週天氣與賽程</h3>
-                      <p className="text-gray-500 dark:text-gray-400 text-sm">下方清單已為您篩選出未來七天的賽程，請往下捲動查閱詳細的啦啦隊班表與降雨機率預報。</p>
-                    </div>
-                  </div>
+              <div className="flex flex-wrap items-center gap-4 mb-4 text-xs text-gray-600 dark:text-gray-300">
+                <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-[#3b82f6] border-2 border-white mr-1.5 shadow-sm"></span>一般場次</div>
+                <div className="flex items-center"><span className="w-4 h-4 rounded-full bg-[#f59e0b] border-[3px] border-[#fef3c7] mr-1.5 shadow-sm"></span>主題日</div>
+                <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#ef4444] border-2 border-white mr-1.5 shadow-sm"></span>最高氣溫</div>
+                <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#06b6d4] border-2 border-white mr-1.5 shadow-sm"></span>最高降雨量</div>
+                <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#a855f7] border-2 border-white mr-1.5 shadow-sm"></span>最高溫且最高降雨</div>
+              </div>
+              <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
+                <div className="relative h-[300px] md:h-[400px]" style={{ width: safeChartWidth }}>
+                  <Line options={chartOptions} data={chartJsData} />
                 </div>
-              ) : null}
+              </div>
             </div>
           )}
         </div>
