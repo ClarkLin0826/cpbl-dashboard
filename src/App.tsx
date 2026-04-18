@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -120,149 +120,187 @@ export default function App() {
     setSelectedCheerleader('All');
   }, [selectedOption]);
 
+  const processData = useCallback((data: any, isInitial: boolean, isMountedObj = { current: true }) => {
+    if (!isMountedObj.current) return;
+    // Extract IG mapping if the sheet exists
+    const newIgMapping: Record<string, string> = {};
+    const igSheetKey = Object.keys(data).find(k => {
+      const normalized = k.replace(/\s/g, '').toLowerCase();
+      return normalized.includes('啦啦隊ig') || normalized.includes('cheerleadersig') || normalized === 'ig';
+    });
+    
+    if (igSheetKey) {
+      const igData = Array.isArray(data[igSheetKey]) ? data[igSheetKey] : Object.values(data[igSheetKey]);
+      igData.forEach((row: any) => {
+        if (!row || typeof row !== 'object') return;
+        const normalizedRow: Record<string, any> = {};
+        Object.keys(row).forEach(key => {
+          normalizedRow[key.replace(/\s/g, '').toLowerCase()] = row[key];
+        });
+        const name = normalizedRow['名字'] || normalizedRow['name'] || normalizedRow['姓名'] || normalizedRow['啦啦隊'];
+        const ig = normalizedRow['ig'] || normalizedRow['連結'] || normalizedRow['url'] || normalizedRow['ig連結'];
+        if (name && ig) {
+          newIgMapping[name.toString().trim().toLowerCase()] = ig.toString().trim();
+        }
+      });
+      delete data[igSheetKey];
+    }
+    setIgMapping((prev) => Object.keys(newIgMapping).length > 0 ? newIgMapping : prev);
+
+    const flatData: GameData[] = [];
+    const yearKeys = Object.keys(data).filter(k => /^\d{4}$/.test(k));
+    const winRateSheetNames = ['年度勝率', '球隊戰績', '勝率', '戰績'];
+    const otherKeys = Object.keys(data).filter(k => !/^\d{4}$/.test(k) && !winRateSheetNames.includes(k));
+    
+    yearKeys.forEach(key => {
+      if (Array.isArray(data[key])) flatData.push(...data[key]);
+    });
+    otherKeys.forEach(key => {
+      if (Array.isArray(data[key])) flatData.push(...data[key]);
+    });
+
+    const uniqueGamesMap = new Map<string, GameData>();
+    [...otherKeys, ...yearKeys].forEach(key => {
+      if (Array.isArray(data[key])) {
+        data[key].forEach((item: GameData) => {
+          if (!item.Date || !item.GameSno) return;
+          const year = item.Date.split('/')[0];
+          const normSno = isNaN(Number(item.GameSno)) ? item.GameSno : Number(item.GameSno);
+          const uniqueKey = `${year}-${normSno}`;
+          
+          // Basic normalization beforehand for the matchup view specifically
+          let homeTeam = item.HomeTeam || item['主場'];
+          let awayTeam = item.AwayTeam || item['客場'];
+          let stadium = item.Stadium || item['球場'];
+          const rawMatch = item.Matchup || item['對戰組合'] || '';
+          
+          if (rawMatch && (!homeTeam || !awayTeam || !stadium)) {
+            const matchResult = rawMatch.match(/^(.+?)\s+v\.s\.\s+(.+?)\s+@(.+)$/);
+            if (matchResult) {
+              if (!awayTeam) awayTeam = matchResult[1].trim();
+              if (!homeTeam) homeTeam = matchResult[2].trim();
+              if (!stadium) stadium = matchResult[3].trim();
+            }
+          }
+          
+          uniqueGamesMap.set(uniqueKey, {
+            ...item,
+            HomeTeam: homeTeam || item.HomeTeam,
+            AwayTeam: awayTeam || item.AwayTeam,
+            Stadium: stadium || item.Stadium
+          });
+        });
+      }
+    });
+    
+    const uniqueData = Array.from(uniqueGamesMap.values());
+    const processedData = uniqueData.map(item => {
+      let homeTeam = (item.HomeTeam || '').trim();
+      ['味全', '兄弟', '中信', '統一', '樂天', '台鋼', '富邦'].forEach(keyword => {
+        if (homeTeam && homeTeam.includes(keyword)) {
+          if (keyword === '味全') homeTeam = '味全龍';
+          if (keyword === '兄弟' || keyword === '中信') homeTeam = '中信兄弟';
+          if (keyword === '統一') homeTeam = '統一7-ELEVEn獅';
+          if (keyword === '樂天') homeTeam = '樂天桃猿';
+          if (keyword === '台鋼') homeTeam = '台鋼雄鷹';
+          if (keyword === '富邦') homeTeam = '富邦悍將';
+        }
+      });
+      if (homeTeam === 'Lamigo桃猿') homeTeam = 'Lamigo桃猿';
+      if (homeTeam.includes('統一') && homeTeam.includes('獅')) homeTeam = '統一7-ELEVEn獅';
+      if (homeTeam === '統一狮') homeTeam = '統一7-ELEVEn獅';
+      
+      let awayTeam = (item.AwayTeam || '').trim();
+      ['味全', '兄弟', '中信', '統一', '樂天', '台鋼', '富邦'].forEach(keyword => {
+        if (awayTeam && awayTeam.includes(keyword)) {
+          if (keyword === '味全') awayTeam = '味全龍';
+          if (keyword === '兄弟' || keyword === '中信') awayTeam = '中信兄弟';
+          if (keyword === '統一') awayTeam = '統一7-ELEVEn獅';
+          if (keyword === '樂天') awayTeam = '樂天桃猿';
+          if (keyword === '台鋼') awayTeam = '台鋼雄鷹';
+          if (keyword === '富邦') awayTeam = '富邦悍將';
+        }
+      });
+      if (awayTeam === 'Lamigo桃猿') awayTeam = 'Lamigo桃猿';
+      if (awayTeam.includes('統一') && awayTeam.includes('獅')) awayTeam = '統一7-ELEVEn獅';
+      if (awayTeam === '統一狮') awayTeam = '統一7-ELEVEn獅';
+      
+      let stadium = (item.Stadium || '').trim();
+      
+      // Parse scores and result
+      let awayScore = (item as any).AwayScore !== undefined && (item as any).AwayScore !== '' ? Number((item as any).AwayScore) : undefined;
+      let homeScore = (item as any).HomeScore !== undefined && (item as any).HomeScore !== '' ? Number((item as any).HomeScore) : undefined;
+      let homeResult = (item as any).HomeResult || (item as any)['主場結果'] || '';
+
+      // Auto-calculate HomeResult if not explicitly provided but scores are available
+      if (!homeResult && awayScore !== undefined && homeScore !== undefined) {
+         if (homeScore > awayScore) homeResult = '勝';
+         else if (homeScore < awayScore) homeResult = '敗';
+         else homeResult = '和';
+      }
+
+      return {
+        ...item,
+        HomeTeam: homeTeam,
+        AwayTeam: awayTeam,
+        Stadium: stadium,
+        Audience: Number(item.Audience) || 0,
+        'MaxTemp(C)': Number(item['MaxTemp(C)']) || 0,
+        'Rainfall(mm)': Number(item['Rainfall(mm)']) || 0,
+        'RainProb(%)': item['RainProb(%)'] !== undefined && item['RainProb(%)'] !== '' ? Number(item['RainProb(%)']) : undefined,
+        Theme: item.Theme || item['主題日'] || '',
+        Url: item.Url || item.URL || item['連結'] || '',
+        Cheerleaders: item.Cheerleaders || item['啦啦隊'] || item['啦啦隊班表'] || '',
+        AwayScore: awayScore,
+        HomeScore: homeScore,
+        HomeResult: homeResult,
+      };
+    });
+    
+    setRawData(processedData);
+
+    if (isInitial) {
+      const currentSearchParams = new URLSearchParams(window.location.search);
+      let defaultStartYear = currentSearchParams.get('sy') || 'All';
+      let defaultEndYear = currentSearchParams.get('ey') || 'All';
+
+      const years = Array.from(new Set(processedData.map(d => d.Date ? d.Date.split('/')[0] : '').filter(Boolean))).sort();
+      if (years.length > 0) {
+        const latestYear = years[years.length - 1];
+        const startIdx = Math.max(0, years.length - 3);
+        
+        if (defaultStartYear === 'All' && !currentSearchParams.has('sy')) defaultStartYear = years[startIdx];
+        if (defaultEndYear === 'All' && !currentSearchParams.has('ey')) defaultEndYear = latestYear;
+        
+        setStartYear(defaultStartYear);
+        setEndYear(defaultEndYear);
+      }
+
+      const activeTeams = ['台鋼雄鷹', '中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將'];
+      const allHomeTeams = new Set(processedData.map(d => d.HomeTeam).filter(Boolean));
+      let defaultTeam = currentSearchParams.get('team') || '';
+      
+      if (!defaultTeam) {
+        for (const t of activeTeams) {
+          if (allHomeTeams.has(t)) {
+            defaultTeam = t;
+            break;
+          }
+        }
+        if (!defaultTeam) {
+          defaultTeam = Array.from(allHomeTeams).sort()[0] as string;
+        }
+      }
+      setSelectedOption(defaultTeam);
+      setIsFirstLoad(false);
+    }
+    setLastUpdated(new Date());
+  }, []); // Remove searchParams to prevent unnecessary re-evaluation the processData logic
+
   // Fetch data
   useEffect(() => {
     let isMounted = true;
-
-    const processData = (data: any, isInitial: boolean) => {
-      if (!isMounted) return;
-      // Extract IG mapping if the sheet exists
-      const newIgMapping: Record<string, string> = {};
-      const igSheetKey = Object.keys(data).find(k => {
-        const normalized = k.replace(/\s/g, '').toLowerCase();
-        return normalized.includes('啦啦隊ig') || normalized.includes('cheerleadersig') || normalized === 'ig';
-      });
-      
-      if (igSheetKey) {
-        const igData = Array.isArray(data[igSheetKey]) ? data[igSheetKey] : Object.values(data[igSheetKey]);
-        igData.forEach((row: any) => {
-          if (!row || typeof row !== 'object') return;
-          const normalizedRow: Record<string, any> = {};
-          Object.keys(row).forEach(key => {
-            normalizedRow[key.replace(/\s/g, '').toLowerCase()] = row[key];
-          });
-          const name = normalizedRow['名字'] || normalizedRow['name'] || normalizedRow['姓名'] || normalizedRow['啦啦隊'];
-          const ig = normalizedRow['ig'] || normalizedRow['連結'] || normalizedRow['url'] || normalizedRow['ig連結'];
-          if (name && ig) {
-            newIgMapping[name.toString().trim().toLowerCase()] = ig.toString().trim();
-          }
-        });
-        delete data[igSheetKey];
-      }
-      setIgMapping((prev) => Object.keys(newIgMapping).length > 0 ? newIgMapping : prev);
-
-      const flatData: GameData[] = [];
-      const yearKeys = Object.keys(data).filter(k => /^\d{4}$/.test(k));
-      const winRateSheetNames = ['年度勝率', '球隊戰績', '勝率', '戰績'];
-      const winRatesSheet = winRateSheetNames.map(name => data[name]).find(sheet => Array.isArray(sheet)) || [];
-      const otherKeys = Object.keys(data).filter(k => !/^\d{4}$/.test(k) && !winRateSheetNames.includes(k));
-      
-      yearKeys.forEach(key => {
-        if (Array.isArray(data[key])) flatData.push(...data[key]);
-      });
-      otherKeys.forEach(key => {
-        if (Array.isArray(data[key])) flatData.push(...data[key]);
-      });
-
-      const uniqueGamesMap = new Map<string, GameData>();
-      [...otherKeys, ...yearKeys].forEach(key => {
-        if (Array.isArray(data[key])) {
-          data[key].forEach((item: GameData) => {
-            if (!item.Date || !item.GameSno) return;
-            const year = item.Date.split('/')[0];
-            const normSno = isNaN(Number(item.GameSno)) ? item.GameSno : Number(item.GameSno);
-            const uniqueKey = `${year}-${normSno}`;
-            uniqueGamesMap.set(uniqueKey, item);
-          });
-        }
-      });
-      
-      const uniqueData = Array.from(uniqueGamesMap.values());
-      const processedData = uniqueData.map(item => {
-        const year = item.Date ? item.Date.split('/')[0] : '';
-        let homeTeam = (item.HomeTeam || '').trim();
-        if (homeTeam.includes('統一') && homeTeam.includes('獅')) homeTeam = '統一7-ELEVEn獅';
-        if (homeTeam === '統一狮') homeTeam = '統一7-ELEVEn獅';
-        if (homeTeam === 'Lamigo桃猿') homeTeam = 'Lamigo桃猿';
-        if (homeTeam === '樂天桃猿') homeTeam = '樂天桃猿';
-        if (homeTeam === '中信兄弟') homeTeam = '中信兄弟';
-        if (homeTeam === '富邦悍將') homeTeam = '富邦悍將';
-        if (homeTeam === '味全龍') homeTeam = '味全龍';
-        
-        let awayTeam = (item.AwayTeam || '').trim();
-        if (awayTeam.includes('統一') && awayTeam.includes('獅')) awayTeam = '統一7-ELEVEn獅';
-        if (awayTeam === '統一狮') awayTeam = '統一7-ELEVEn獅';
-        
-        let stadium = (item.Stadium || '').trim();
-        
-        // Parse scores and result
-        let awayScore = (item as any).AwayScore !== undefined && (item as any).AwayScore !== '' ? Number((item as any).AwayScore) : undefined;
-        let homeScore = (item as any).HomeScore !== undefined && (item as any).HomeScore !== '' ? Number((item as any).HomeScore) : undefined;
-        let homeResult = (item as any).HomeResult || (item as any)['主場結果'] || '';
-
-        // Auto-calculate HomeResult if not explicitly provided but scores are available
-        if (!homeResult && awayScore !== undefined && homeScore !== undefined) {
-           if (homeScore > awayScore) homeResult = '勝';
-           else if (homeScore < awayScore) homeResult = '敗';
-           else homeResult = '和';
-        }
-
-        return {
-          ...item,
-          HomeTeam: homeTeam,
-          AwayTeam: awayTeam,
-          Stadium: stadium,
-          Audience: Number(item.Audience) || 0,
-          'MaxTemp(C)': Number(item['MaxTemp(C)']) || 0,
-          'Rainfall(mm)': Number(item['Rainfall(mm)']) || 0,
-          'RainProb(%)': item['RainProb(%)'] !== undefined && item['RainProb(%)'] !== '' ? Number(item['RainProb(%)']) : undefined,
-          Theme: item.Theme || item['主題日'] || '',
-          Url: item.Url || item.URL || item['連結'] || '',
-          Cheerleaders: item.Cheerleaders || item['啦啦隊'] || item['啦啦隊班表'] || '',
-          AwayScore: awayScore,
-          HomeScore: homeScore,
-          HomeResult: homeResult,
-        };
-      });
-      
-      setRawData(processedData);
-
-      if (isInitial) {
-        let defaultStartYear = searchParams.get('sy') || 'All';
-        let defaultEndYear = searchParams.get('ey') || 'All';
-
-        const years = Array.from(new Set(processedData.map(d => d.Date ? d.Date.split('/')[0] : '').filter(Boolean))).sort();
-        if (years.length > 0) {
-          const latestYear = years[years.length - 1];
-          const startIdx = Math.max(0, years.length - 3);
-          
-          if (defaultStartYear === 'All' && !searchParams.has('sy')) defaultStartYear = years[startIdx];
-          if (defaultEndYear === 'All' && !searchParams.has('ey')) defaultEndYear = latestYear;
-          
-          setStartYear(defaultStartYear);
-          setEndYear(defaultEndYear);
-        }
-
-        const activeTeams = ['台鋼雄鷹', '中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將'];
-        const allHomeTeams = new Set(processedData.map(d => d.HomeTeam).filter(Boolean));
-        let defaultTeam = searchParams.get('team') || '';
-        
-        if (!defaultTeam) {
-          for (const t of activeTeams) {
-            if (allHomeTeams.has(t)) {
-              defaultTeam = t;
-              break;
-            }
-          }
-          if (!defaultTeam) {
-            defaultTeam = Array.from(allHomeTeams).sort()[0] as string;
-          }
-        }
-        setSelectedOption(defaultTeam);
-        setIsFirstLoad(false);
-      }
-      setLastUpdated(new Date());
-    };
+    const isMountedObj = { current: true };
 
     const fetchData = async () => {
       setLoading(true);
@@ -279,6 +317,7 @@ export default function App() {
         } else {
           let hasRenderedFromCache = false;
           let hasRenderedRecent = false;
+          // Capture isFirstLoad solely at mount evaluation time
           let isInitialRender = isFirstLoad;
           
           if ('caches' in window) {
@@ -287,7 +326,7 @@ export default function App() {
               const cachedResponse = await cache.match(gasUrl + '_all');
               if (cachedResponse) {
                 const cachedData = await cachedResponse.json();
-                processData(JSON.parse(JSON.stringify(cachedData)), isInitialRender);
+                processData(JSON.parse(JSON.stringify(cachedData)), isInitialRender, isMountedObj);
                 hasRenderedFromCache = true;
                 setLoading(false);
                 isInitialRender = false;
@@ -302,8 +341,8 @@ export default function App() {
               const recentRes = await fetch(recentUrl, { cache: 'no-store' });
               if (recentRes.ok) {
                 const recentData = await recentRes.json();
-                if (!isMounted) return;
-                processData(JSON.parse(JSON.stringify(recentData)), isInitialRender);
+                if (!isMountedObj.current) return;
+                processData(JSON.parse(JSON.stringify(recentData)), isInitialRender, isMountedObj);
                 setLoading(false);
                 isInitialRender = false;
                 hasRenderedRecent = true;
@@ -325,14 +364,14 @@ export default function App() {
               cache.put(gasUrl + '_all', new Response(JSON.stringify(data)));
             }
 
-            if (!isMounted) return;
-            processData(JSON.parse(JSON.stringify(data)), isInitialRender);
+            if (!isMountedObj.current) return;
+            processData(JSON.parse(JSON.stringify(data)), isInitialRender, isMountedObj);
             if (!hasRenderedFromCache && !hasRenderedRecent) {
               setLoading(false);
             }
           })
           .catch(err => {
-            if (!isMounted) return;
+            if (!isMountedObj.current) return;
             if (!hasRenderedFromCache && !hasRenderedRecent) {
               let errorMessage = '無法載入資料，請檢查網址或網路連線。';
               if (err.message === 'Failed to fetch') {
@@ -344,12 +383,12 @@ export default function App() {
               console.error(err);
               setLoading(false);
             } else {
-              console.error('Background fetch failed, but partial/cached data is available:', err);
+              console.warn('Background update fetch failed, but partial/cached data is available:', err.message);
             }
           });
         }
       } catch (err: any) {
-        if (!isMounted) return;
+        if (!isMountedObj.current) return;
         let errorMessage = '發生未預期的錯誤。';
         if (err instanceof Error) errorMessage = `錯誤: ${err.message}`;
         setError(errorMessage);
@@ -359,8 +398,12 @@ export default function App() {
     };
 
     fetchData();
-    return () => { isMounted = false; };
-  }, [gasUrl]);
+    return () => { 
+      isMounted = false; 
+      isMountedObj.current = false;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gasUrl]); // strictly limiting to gasUrl to prevent loop with isFirstLoad escaping or useCallback changes
 
   // Update selected option when options change and current is invalid
   useEffect(() => {
@@ -719,74 +762,8 @@ export default function App() {
       
       const isInitialRender = false;
       
-      const flatData = Object.values(data).flat() as any[];
-      const processedData = flatData.map(item => {
-        let homeTeam = item.HomeTeam || item['主場'];
-        let awayTeam = item.AwayTeam || item['客場'];
-        let stadium = item.Stadium || item['球場'];
-
-        const rawMatch = item.Matchup || item['對戰組合'] || '';
-        
-        if (rawMatch && (!homeTeam || !awayTeam || !stadium)) {
-          const matchResult = rawMatch.match(/^(.+?)\s+v\.s\.\s+(.+?)\s+@(.+)$/);
-          if (matchResult) {
-            if (!awayTeam) awayTeam = matchResult[1].trim();
-            if (!homeTeam) homeTeam = matchResult[2].trim();
-            if (!stadium) stadium = matchResult[3].trim();
-          }
-        }
-        
-        ['味全', '兄弟', '中信', '統一', '樂天', '台鋼', '富邦'].forEach(keyword => {
-          if (homeTeam && homeTeam.includes(keyword)) {
-            if (keyword === '味全') homeTeam = '味全龍';
-            if (keyword === '兄弟' || keyword === '中信') homeTeam = '中信兄弟';
-            if (keyword === '統一') homeTeam = '統一7-ELEVEn獅';
-            if (keyword === '樂天') homeTeam = '樂天桃猿';
-            if (keyword === '台鋼') homeTeam = '台鋼雄鷹';
-            if (keyword === '富邦') homeTeam = '富邦悍將';
-          }
-          if (awayTeam && awayTeam.includes(keyword)) {
-            if (keyword === '味全') awayTeam = '味全龍';
-            if (keyword === '兄弟' || keyword === '中信') awayTeam = '中信兄弟';
-            if (keyword === '統一') awayTeam = '統一7-ELEVEn獅';
-            if (keyword === '樂天') awayTeam = '樂天桃猿';
-            if (keyword === '台鋼') awayTeam = '台鋼雄鷹';
-            if (keyword === '富邦') awayTeam = '富邦悍將';
-          }
-        });
-
-        // Parse scores and result
-        let awayScore = (item as any).AwayScore !== undefined && (item as any).AwayScore !== '' ? Number((item as any).AwayScore) : undefined;
-        let homeScore = (item as any).HomeScore !== undefined && (item as any).HomeScore !== '' ? Number((item as any).HomeScore) : undefined;
-        let homeResult = (item as any).HomeResult || (item as any)['主場結果'] || '';
-
-        // Auto-calculate HomeResult if not explicitly provided but scores are available
-        if (!homeResult && awayScore !== undefined && homeScore !== undefined) {
-           if (homeScore > awayScore) homeResult = '勝';
-           else if (homeScore < awayScore) homeResult = '敗';
-           else homeResult = '和';
-        }
-
-        return {
-          ...item,
-          HomeTeam: homeTeam,
-          AwayTeam: awayTeam,
-          Stadium: stadium,
-          Audience: Number(item.Audience) || 0,
-          'MaxTemp(C)': Number(item['MaxTemp(C)']) || 0,
-          'Rainfall(mm)': Number(item['Rainfall(mm)']) || 0,
-          'RainProb(%)': item['RainProb(%)'] !== undefined && item['RainProb(%)'] !== '' ? Number(item['RainProb(%)']) : undefined,
-          Theme: item.Theme || item['主題日'] || '',
-          Url: item.Url || item.URL || item['連結'] || '',
-          Cheerleaders: item.Cheerleaders || item['啦啦隊'] || item['啦啦隊班表'] || '',
-          AwayScore: awayScore,
-          HomeScore: homeScore,
-          HomeResult: homeResult,
-        };
-      });
+      processData(data, isInitialRender);
       
-      setRawData(processedData);
-      setLastUpdated(new Date());
     } catch (err: any) {
       console.error(err);
       let errorMessage = '發生未預期的錯誤。';
