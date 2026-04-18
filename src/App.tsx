@@ -58,6 +58,8 @@ export default function App() {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [chartType, setChartType] = useState<'trend' | 'yoy'>('trend');
+  const [toastContent, setToastContent] = useState<{title: string, message: string, urlText?: string} | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleShare = async () => {
     try {
@@ -699,6 +701,8 @@ export default function App() {
   const exportChartImage = async () => {
     const chartContainer = document.getElementById('exportable-chart-area');
     if (!chartContainer) return;
+
+    setIsExporting(true);
     
     // Temporarily fix scroll position for html-to-image
     const scrollContainers = chartContainer.querySelectorAll('.overflow-x-auto');
@@ -728,6 +732,7 @@ export default function App() {
 
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       let sharedNative = false;
+      const shareText = `看看 ${selectedOption} 的中職票房數據與分析！\n\n📊 互動圖表與詳細資訊：${window.location.href}`;
 
       // Try using Web Share API if supported and on mobile (it can share images natively with text)
       if (navigator.share && navigator.canShare && isMobile) {
@@ -736,7 +741,7 @@ export default function App() {
           try {
             await navigator.share({
               title: '中職票房分析',
-              text: `看看 ${selectedOption} 的票房數據與分析！\n\n📊 完整圖表：${window.location.href}`,
+              text: shareText,
               files: [file]
             });
             sharedNative = true;
@@ -759,7 +764,12 @@ export default function App() {
               new ClipboardItem({ 'image/png': blob })
             ]);
             copiedToClipboard = true;
-            alert('圖表截圖已複製到剪貼簿！🎉\n\n您可以直接到 Facebook / Threads 按 Ctrl+V 貼上分享！\n發文時歡迎順手貼上網站連結與朋友分享唷：\n' + window.location.href);
+            setToastContent({
+              title: '🎉 圖表截圖已複製成功！',
+              message: '您可以直接到 Facebook 貼上圖片 (Ctrl+V) 囉！',
+              urlText: shareText
+            });
+            setTimeout(() => setToastContent(null), 8000);
           } catch (err) {
             console.warn("Clipboard write failed, downloading instead...", err);
           }
@@ -773,19 +783,29 @@ export default function App() {
           link.href = url;
           link.click();
           URL.revokeObjectURL(url);
-          alert('圖表已下載至您的電腦！\n發片時可以隨文附上網站連結喔：\n' + window.location.href);
+          setToastContent({
+            title: '⬇️ 圖表已下載至電腦',
+            message: '由於瀏覽器限制複製圖片，已幫您存為圖檔！直接將圖檔拉到社群發布即可！',
+            urlText: shareText
+          });
+          setTimeout(() => setToastContent(null), 8000);
         }
       }
       
     } catch (error) {
       console.error('Failed to export image', error);
-      alert('圖片匯出失敗，請重試或回報問題。');
+      setToastContent({
+        title: '❌ 匯出失敗',
+        message: '圖片匯出過程發生錯誤，請重試或回報。'
+      });
+      setTimeout(() => setToastContent(null), 5000);
     } finally {
       // Revert scroll transforms
       scrollState.forEach(({ el, transform, transition }) => {
         el.style.transform = transform;
         el.style.transition = transition;
       });
+      setIsExporting(false);
     }
   };
 
@@ -1398,13 +1418,13 @@ export default function App() {
           <div className="flex-1"></div>
           <button
             onClick={exportChartImage}
-            disabled={chartData.length === 0}
+            disabled={chartData.length === 0 || isExporting}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              chartData.length === 0 ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-500' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+              (chartData.length === 0 || isExporting) ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-gray-500' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
             }`}
              title="儲存為圖片 / 分享圖表至社群平台"
           >
-            <Camera className="w-4 h-4" /> 截圖分享圖表
+            {isExporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />} {isExporting ? '處理中...' : '截圖分享圖表'}
           </button>
         </div>
 
@@ -1876,6 +1896,31 @@ export default function App() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {toastContent && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 px-5 py-4 rounded-xl shadow-2xl flex flex-col min-w-[300px] max-w-sm animate-in fade-in slide-in-from-bottom-8">
+          <div className="flex justify-between items-start gap-4">
+            <div>
+              <h4 className="font-bold text-emerald-400 dark:text-emerald-600">{toastContent.title}</h4>
+              <p className="text-sm mt-1 whitespace-pre-line text-slate-200 dark:text-slate-700">{toastContent.message}</p>
+            </div>
+            <button onClick={() => setToastContent(null)} className="text-slate-400 dark:text-slate-500 hover:text-white dark:hover:text-black shrink-0">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          {toastContent.urlText && (
+            <button 
+              onClick={() => {
+                navigator.clipboard.writeText(toastContent.urlText!);
+                setToastContent(prev => prev ? {...prev, message: '🔗 說明文字與網址已複製！您可以一併貼上到貼文中了。'} : null);
+              }}
+              className="mt-3 text-sm bg-blue-600 hover:bg-blue-500 dark:bg-blue-100 dark:hover:bg-blue-200 dark:text-blue-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors"
+            >
+              <Share2 className="w-4 h-4" /> 複製貼文說明文字與網址
+            </button>
+          )}
         </div>
       )}
     </div>
