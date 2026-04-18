@@ -739,12 +739,31 @@ export default function App() {
         const file = new File([blob], `CPBL_Chart_${selectedOption}_${startYear}-${endYear}.png`, { type: 'image/png' });
         if (navigator.canShare({ files: [file] })) {
           try {
+            // Mobile apps (like FB/IG/Threads) often ignore the "text" field when sharing a "file".
+            // Pre-emptively copy the text to clipboard so users can easily "Paste" it as the caption.
+            if (navigator.clipboard) {
+              try {
+                await navigator.clipboard.writeText(shareText);
+              } catch (e) {
+                console.warn("Auto-copy text for mobile failed", e);
+              }
+            }
+
             await navigator.share({
               title: '中職票房分析',
-              text: shareText,
+              text: shareText, // keep for apps that do support both (like LINE, Telegram, etc.)
               files: [file]
             });
             sharedNative = true;
+
+            // Show toast just in case they return to the browser and want to copy it again
+            setToastContent({
+              title: '🎉 圖片分享成功！',
+              message: '若您的社群 APP 沒有自動帶入推廣文字，\n剛才系統已經幫您將「推廣文字與網址」複製到剪貼簿了！在貼文中直接貼上即可。',
+              urlText: shareText
+            });
+            setTimeout(() => setToastContent(null), 8000);
+            
           } catch (error) {
             if ((error as any).name !== 'AbortError') {
                console.log("Web Share failed, falling back to clipboard", error);
