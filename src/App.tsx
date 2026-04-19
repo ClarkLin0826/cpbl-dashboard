@@ -1831,8 +1831,25 @@ export default function App() {
         )}
       </main>
 
+      {/* Sponsorship Section */}
+      <div className="flex justify-center my-6 px-4">
+        <div className="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-2xl shadow-sm border border-emerald-100 dark:border-slate-700 max-w-lg w-full text-center hover:shadow-md transition-shadow">
+          <p className="text-gray-700 dark:text-gray-300 font-medium mb-5 text-sm sm:text-base leading-relaxed">
+            請開發者買杯進場看球的啤酒 🍺，<br className="hidden sm:block" />支持持續更新數據！
+          </p>
+          <a
+            href="https://p.ecpay.com.tw/96AD638"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center w-full sm:w-auto bg-[#00C66B] hover:bg-[#00ab5d] text-white px-8 py-3 rounded-full font-bold text-base shadow-lg shadow-[#00C66B]/30 hover:shadow-[#00C66B]/50 transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95"
+          >
+            以綠界 ECPay 贊助支持
+          </a>
+        </div>
+      </div>
+
       {/* Footer Disclaimer */}
-      <footer className="w-full text-center py-6 text-xs text-gray-400 dark:text-gray-500 max-w-7xl mx-auto px-4">
+      <footer className="w-full text-center pb-8 text-xs text-gray-400 dark:text-gray-500 max-w-7xl mx-auto px-4">
         數據來源為公開資訊，本站為獨立數據統整平台，與官方無關
       </footer>
 
