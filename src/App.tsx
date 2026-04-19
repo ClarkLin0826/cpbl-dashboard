@@ -1243,7 +1243,7 @@ export default function App() {
             >
               <option value="homeTeam">各隊主場人數</option>
               <option value="stadium">各球場人數</option>
-              <option value="cheerleaderWinRate">各隊女孩勝率排行</option>
+              <option value="cheerleaderWinRate">各隊啦啦隊勝率排行</option>
               <option value="matchup">對戰組合交叉分析</option>
             </select>
           </div>
@@ -1624,8 +1624,8 @@ export default function App() {
               {cheerleaderStats.length === 0 ? (
                 <div className="text-center text-gray-400 py-10">目前沒有符合條件的啦啦隊勝率資料。</div>
               ) : (
-                <div className="w-full overflow-x-auto custom-scrollbar rounded-xl border border-gray-200 dark:border-slate-700 mx-auto max-w-4xl shadow-sm">
-                  <table className="w-full text-center text-sm table-auto min-w-[600px]">
+                <div className="w-full sm:w-fit max-w-full overflow-x-auto custom-scrollbar rounded-xl border border-gray-200 dark:border-slate-700 mx-auto shadow-sm">
+                  <table className="w-full sm:w-auto text-center text-sm table-auto min-w-[500px]">
                     <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
                       <tr>
                         <th className="py-3 px-2 font-bold border-b border-gray-200 dark:border-slate-700 w-16 whitespace-nowrap">排名</th>
