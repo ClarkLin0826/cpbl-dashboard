@@ -1831,6 +1831,11 @@ export default function App() {
         )}
       </main>
 
+      {/* Footer Disclaimer */}
+      <footer className="w-full text-center py-6 text-xs text-gray-400 dark:text-gray-500 max-w-7xl mx-auto px-4">
+        數據來源為公開資訊，本站為獨立數據統整平台，與官方無關
+      </footer>
+
       {/* Game Details Modal */}
       {selectedGame && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedGame(null)}>
