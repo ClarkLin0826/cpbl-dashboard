@@ -49,7 +49,6 @@ export default function App() {
   const [showNextWeek, setShowNextWeek] = useState(searchParams.get('nw') === 'true');
   const [sortMode, setSortMode] = useState<SortMode>((searchParams.get('sort') as SortMode) || 'date');
   
-  const [showSettings, setShowSettings] = useState(false);
   const [selectedGame, setSelectedGame] = useState<GameData | null>(null);
   const [igMapping, setIgMapping] = useState<Record<string, string>>({});
   const [isFirstLoad, setIsFirstLoad] = useState(true);
@@ -1172,33 +1171,8 @@ export default function App() {
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             )}
           </button>
-          <button 
-            onClick={() => setShowSettings(!showSettings)}
-            className="p-2 hover:bg-blue-600 dark:hover:bg-slate-700 rounded-full transition-colors"
-            title="設定"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
         </div>
       </header>
-
-      {/* Settings Panel */}
-      {showSettings && (
-        <div className="bg-white dark:bg-slate-800 p-4 shadow-md border-b border-gray-200 dark:border-slate-700 animate-in slide-in-from-top-2 relative z-20">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            GAS Web App URL (留空則使用測試資料)
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="url"
-              value={gasUrl}
-              onChange={(e) => setGasUrl(e.target.value)}
-              placeholder="https://script.google.com/macros/s/.../exec"
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-      )}
 
       <main className="p-4 max-w-7xl mx-auto space-y-6">
         {loading && rawData.length === 0 ? (
