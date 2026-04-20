@@ -1161,7 +1161,7 @@ export default function App() {
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 ${darkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-gray-50 text-gray-900'}`}>
       {/* Header */}
-      <header className="bg-blue-700 dark:bg-slate-800 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-30 transition-colors duration-300">
+      <header className="bg-blue-700 dark:bg-slate-800 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-50 transition-colors duration-300">
         <div className="flex items-center gap-2">
           <BarChart2 className="w-6 h-6" />
           <h1 className="text-xl font-bold">中職票房分析</h1>
@@ -1560,7 +1560,7 @@ export default function App() {
               <table className="w-full text-center border-collapse text-sm min-w-[600px]">
                 <thead>
                   <tr>
-                    <th className="p-3 border border-gray-200 bg-slate-50 dark:bg-slate-900/50 text-slate-600 font-semibold w-24 whitespace-nowrap">
+                    <th className="p-3 border border-gray-200 bg-slate-50 dark:bg-slate-900/50 text-slate-600 font-semibold w-24 sm:w-32 whitespace-nowrap sticky left-0 z-20 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
                       主場 \ 客場
                     </th>
                     {Array.from(new Set([...chartData.map(d=>d.HomeTeam), ...chartData.map(d=>d.AwayTeam)])).filter(Boolean).sort().map(team => (
@@ -1580,8 +1580,8 @@ export default function App() {
 
                     return (
                       <tr key={`row-${home}`}>
-                        <td className="p-3 border border-gray-200 bg-slate-50 dark:bg-slate-900/50 font-semibold text-slate-700 whitespace-nowrap">
-                          {home} <span className="text-xs text-slate-400 font-normal">(主)</span>
+                        <td className="p-3 border border-gray-200 bg-slate-50 dark:bg-slate-900/50 font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap sticky left-0 z-10 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)] w-24 sm:w-32">
+                          {home} <span className="text-[10px] sm:text-xs text-slate-400 font-normal">(主)</span>
                         </td>
                         {allTeams.map(away => {
                           if (home === away) {
@@ -1937,7 +1937,7 @@ export default function App() {
 
       {/* Game Details Modal */}
       {selectedGame && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedGame(null)}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedGame(null)}>
           <div 
             className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
