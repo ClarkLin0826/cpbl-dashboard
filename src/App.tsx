@@ -1552,12 +1552,13 @@ export default function App() {
               <p className="text-sm text-gray-400">目前設定的篩選條件太嚴格，請嘗試放寬年份、星期或主題日限制。</p>
             </div>
           ) : viewMode === 'matchup' ? (
-            <div className="flex flex-col flex-1 w-full bg-white p-4 rounded-xl border border-gray-100 shadow-sm mt-4 overflow-x-auto">
+            <div className="flex flex-col flex-1 w-full bg-white p-4 rounded-xl border border-gray-100 shadow-sm mt-4">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 text-center">對戰組合場均人數矩陣 (Heatmap)</h3>
               <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 flex justify-end items-center gap-2">
                 <span>圖例顏色深淺代表平均人數多寡（顏色越橘越多人）</span>
               </div>
-              <table className="w-full text-center border-collapse text-sm min-w-[600px]">
+              <div className="overflow-x-auto w-full">
+                <table className="w-full text-center border-collapse text-sm min-w-[600px]">
                 <thead>
                   <tr>
                     <th className="p-3 border border-gray-200 bg-slate-50 dark:bg-slate-900/50 text-slate-600 font-semibold w-24 sm:w-32 whitespace-nowrap sticky left-0 z-20 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)]">
@@ -1616,6 +1617,7 @@ export default function App() {
                   })}
                 </tbody>
               </table>
+              </div>
               <div className="mt-4 text-xs text-center text-gray-400">
                 註：左側縱軸為主場球隊，上方橫軸為客場球隊。<br/>
                 格子內數字為「場均觀眾數」，下方小括號表示符合條件的有效賽事總場次。
