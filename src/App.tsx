@@ -233,32 +233,10 @@ export default function App() {
     const uniqueData = Array.from(uniqueGamesMap.values());
     const processedData = uniqueData.map(item => {
       let homeTeam = (item.HomeTeam || '').trim();
-      ['味全', '兄弟', '中信', '統一', '樂天', '台鋼', '富邦'].forEach(keyword => {
-        if (homeTeam && homeTeam.includes(keyword)) {
-          if (keyword === '味全') homeTeam = '味全龍';
-          if (keyword === '兄弟' || keyword === '中信') homeTeam = '中信兄弟';
-          if (keyword === '統一') homeTeam = '統一7-ELEVEn獅';
-          if (keyword === '樂天') homeTeam = '樂天桃猿';
-          if (keyword === '台鋼') homeTeam = '台鋼雄鷹';
-          if (keyword === '富邦') homeTeam = '富邦悍將';
-        }
-      });
-      if (homeTeam === 'Lamigo桃猿') homeTeam = 'Lamigo桃猿';
       if (homeTeam.includes('統一') && homeTeam.includes('獅')) homeTeam = '統一7-ELEVEn獅';
       if (homeTeam === '統一狮') homeTeam = '統一7-ELEVEn獅';
       
       let awayTeam = (item.AwayTeam || '').trim();
-      ['味全', '兄弟', '中信', '統一', '樂天', '台鋼', '富邦'].forEach(keyword => {
-        if (awayTeam && awayTeam.includes(keyword)) {
-          if (keyword === '味全') awayTeam = '味全龍';
-          if (keyword === '兄弟' || keyword === '中信') awayTeam = '中信兄弟';
-          if (keyword === '統一') awayTeam = '統一7-ELEVEn獅';
-          if (keyword === '樂天') awayTeam = '樂天桃猿';
-          if (keyword === '台鋼') awayTeam = '台鋼雄鷹';
-          if (keyword === '富邦') awayTeam = '富邦悍將';
-        }
-      });
-      if (awayTeam === 'Lamigo桃猿') awayTeam = 'Lamigo桃猿';
       if (awayTeam.includes('統一') && awayTeam.includes('獅')) awayTeam = '統一7-ELEVEn獅';
       if (awayTeam === '統一狮') awayTeam = '統一7-ELEVEn獅';
       
