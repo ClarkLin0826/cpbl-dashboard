@@ -3,12 +3,11 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
-  /* Do not set background color on html/body here; managed dynamically by App.tsx for PWA status bar sync */
   html, body {
-    @apply text-gray-900;
+    @apply bg-gray-50 text-gray-900;
   }
   .dark body {
-    @apply text-slate-100;
+    @apply bg-slate-900 text-slate-100;
   }
 }
 

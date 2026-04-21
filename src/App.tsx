@@ -63,16 +63,24 @@ export default function App() {
 
   // Sync PWA theme colors to match the header exactly to prevent Android white line glitches
   useEffect(() => {
+    // dynamically manage theme-color meta tag
+    let metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (!metaTheme) {
+      metaTheme = document.createElement('meta');
+      metaTheme.name = 'theme-color';
+      document.head.appendChild(metaTheme);
+    }
+    
+    // Clear inline styles that caused the blue line bug
+    document.body.style.backgroundColor = '';
+    document.documentElement.style.backgroundColor = '';
+
     if (darkMode) {
       document.documentElement.classList.add('dark');
-      document.body.style.backgroundColor = '#1e293b'; // Matches header dark:bg-slate-800
-      document.documentElement.style.backgroundColor = '#1e293b';
-      document.getElementById('theme-color-meta')?.setAttribute('content', '#1e293b');
+      metaTheme.setAttribute('content', '#1e293b'); // Matches header dark:bg-slate-800
     } else {
       document.documentElement.classList.remove('dark');
-      document.body.style.backgroundColor = '#1d4ed8'; // Matches header bg-blue-700
-      document.documentElement.style.backgroundColor = '#1d4ed8';
-      document.getElementById('theme-color-meta')?.setAttribute('content', '#1d4ed8');
+      metaTheme.setAttribute('content', '#1d4ed8'); // Matches header bg-blue-700
     }
   }, [darkMode]);
 
