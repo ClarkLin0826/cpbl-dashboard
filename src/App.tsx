@@ -1750,16 +1750,22 @@ export default function App() {
             </div>
           ) : chartType === 'yoy' ? (
             <div className="flex flex-col flex-1 w-full bg-white dark:bg-slate-800 p-2 md:p-6 mb-2">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-8 text-center">歷年場均人數與成長率</h3>
-              
-              {/* CSS Bar Chart */}
-              <div className="w-full relative pb-10 pt-4 mt-2">
-                {/* Max label floating independent of the scrolling container so it always shows */}
-                <div className="absolute top-0 right-4 sm:right-10 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/50 rounded-full text-amber-600 dark:text-amber-400 text-xs font-medium shadow-sm flex items-center gap-1.5 z-20">
+              <div className="relative flex justify-center items-center mb-6">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 text-center">歷年場均人數與成長率</h3>
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/50 rounded-full text-amber-600 dark:text-amber-400 text-xs font-medium shadow-sm items-center gap-1.5 z-20 hidden md:flex">
                    <TrendingUp className="w-3.5 h-3.5" /> 年最高場均: {Math.max(...yearlyStats.map(s => s.avg)).toLocaleString()}
                 </div>
+              </div>
+              <div className="flex md:hidden justify-end mb-6 pr-2">
+                <div className="px-3 py-1.5 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/50 rounded-full text-amber-600 dark:text-amber-400 text-xs font-medium shadow-sm flex items-center gap-1.5 w-fit">
+                   <TrendingUp className="w-3.5 h-3.5" /> 年最高場均: {Math.max(...yearlyStats.map(s => s.avg)).toLocaleString()}
+                </div>
+              </div>
+              
+              {/* CSS Bar Chart */}
+              <div className="w-full relative pb-10 pt-4">
                 
-                <div className="flex h-64 relative ml-8 sm:ml-12 border-l border-b border-gray-200 dark:border-slate-600 mt-16">
+                <div className="flex h-64 relative ml-8 sm:ml-12 border-l border-b border-gray-200 dark:border-slate-600 mt-12">
                    {/* Y-axis Guides and Ticks (Fixed outside scrolling area) */}
                    <div className="absolute left-0 top-0 w-full h-full flex flex-col justify-between pointer-events-none z-0">
                       {[100, 75, 50, 25, 0].map(percent => {
