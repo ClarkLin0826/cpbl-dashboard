@@ -1481,56 +1481,73 @@ export default function App() {
 
         {/* Chart Area */}
         <div id="exportable-chart-area" className={`bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 flex flex-col ${showNextWeek ? '' : 'min-h-[400px]'}`}>
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : viewMode === 'matchup' ? '對戰組合場均人數矩陣 (Heatmap)' : viewMode === 'cheerleaderWinRate' ? '啦啦隊主場勝率排名' : `${selectedOption} - 人數趨勢`}
-                {loading && <span className="text-sm font-normal text-gray-400 animate-pulse">載入中...</span>}
-              </h2>
-              {!showNextWeek && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && chartData.length > 0 && (
-                <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
-                  <button
-                    onClick={() => setChartType('trend')}
-                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${chartType === 'trend' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                  >
-                    每日趨勢
-                  </button>
-                  <button
-                    onClick={() => setChartType('yoy')}
-                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${chartType === 'yoy' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                  >
-                    年度比較
-                  </button>
-                </div>
-              )}
-            </div>
-            
-            {!loading && chartData.length > 0 && !showNextWeek && chartType === 'trend' && viewMode !== 'cheerleaderWinRate' && (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:flex lg:flex-nowrap gap-3 items-stretch w-full md:w-auto mt-2 md:mt-0">
-                {/* 總場次 */}
-                <div className="col-span-1 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-2 flex flex-col items-start shadow-sm transition-transform hover:-translate-y-0.5">
-                  <span className="text-slate-500 dark:text-slate-400 text-xs font-bold mb-0.5 tracking-wider">總場次</span>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-slate-800 dark:text-slate-100 text-xl font-black">{chartData.length}</span>
-                    <span className="text-slate-500 dark:text-slate-400 text-xs font-medium">場</span>
+            <div className="flex flex-col md:flex-row justify-between mb-4 gap-4">
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-col md:flex-row md:items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                      {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : viewMode === 'matchup' ? '對戰組合場均人數矩陣 (Heatmap)' : viewMode === 'cheerleaderWinRate' ? '啦啦隊主場勝率排名' : `${selectedOption} - 人數趨勢`}
+                      {loading && <span className="text-sm font-normal text-gray-400 animate-pulse">載入中...</span>}
+                    </h2>
+                    {!showNextWeek && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && chartData.length > 0 && (
+                      <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
+                        <button
+                          onClick={() => setChartType('trend')}
+                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${chartType === 'trend' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                        >
+                          每日趨勢
+                        </button>
+                        <button
+                          onClick={() => setChartType('yoy')}
+                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${chartType === 'yoy' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                        >
+                          年度比較
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
-                {/* 總人數 */}
-                <div className="col-span-1 bg-emerald-50 dark:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-2 flex flex-col items-start shadow-sm transition-transform hover:-translate-y-0.5">
-                  <span className="text-emerald-700 dark:text-emerald-400/80 text-xs font-bold mb-0.5 tracking-wider">總人數</span>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-emerald-700 dark:text-emerald-400 text-xl font-black">{chartData.reduce((sum, d) => sum + d.Audience, 0).toLocaleString()}</span>
-                    <span className="text-emerald-700 dark:text-emerald-400/80 text-xs font-medium">人</span>
-                  </div>
+                {/* 篩選條件標示 (讓截圖可以看到) */}
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                  <span className="font-medium bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded text-gray-600 dark:text-gray-300">
+                    {startYear === 'All' && endYear === 'All' ? '歷年' : `${startYear === 'All' ? '最早期' : startYear} ~ ${endYear === 'All' ? '最新' : endYear}`}
+                  </span>
+                  {selectedStadiumFilter !== 'All' && <span>📍 {selectedStadiumFilter}</span>}
+                  {selectedDayOfWeek !== 'All' && <span>📅 {selectedDayOfWeek}</span>}
+                  {selectedThemeFilter === 'ThemeOnly' && <span>⭐ 僅主題日</span>}
+                  {selectedThemeFilter === 'NormalOnly' && <span>⚾ 僅一般例行賽</span>}
+                  {selectedGameResult !== 'All' && <span>🏆 比賽結果: {selectedGameResult === 'W' ? '主場勝' : selectedGameResult === 'L' ? '主場敗' : '和局'}</span>}
+                  {selectedCheerleader !== 'All' && <span>💃 {selectedCheerleader}</span>}
                 </div>
-
-                {/* 平均年度勝率 */}
-                {viewMode === 'homeTeam' && (
-                  <div className="col-span-1 bg-indigo-50 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 rounded-xl px-4 py-2 flex flex-col items-start shadow-sm transition-transform hover:-translate-y-0.5">
-                    <span className="text-indigo-700 dark:text-indigo-400/80 text-xs font-bold mb-0.5 tracking-wider">主場勝率</span>
+              </div>
+              
+              {!loading && chartData.length > 0 && !showNextWeek && chartType === 'trend' && viewMode !== 'cheerleaderWinRate' && (
+                <div className="flex flex-wrap lg:flex-nowrap gap-3 items-stretch w-full xl:w-auto mt-2 xl:mt-0 justify-start xl:justify-end">
+                  {/* 總場次 */}
+                  <div className="bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-2 flex flex-col items-start shadow-sm transition-transform hover:-translate-y-0.5">
+                    <span className="text-slate-500 dark:text-slate-400 text-xs font-bold mb-0.5 tracking-wider">總場次</span>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-indigo-700 dark:text-indigo-400 text-xl font-black">
+                      <span className="text-slate-800 dark:text-slate-100 text-xl font-black">{chartData.length}</span>
+                      <span className="text-slate-500 dark:text-slate-400 text-xs font-medium">場</span>
+                    </div>
+                  </div>
+                
+                  {/* 總人數 */}
+                  <div className="bg-emerald-50 dark:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-2 flex flex-col items-start shadow-sm transition-transform hover:-translate-y-0.5">
+                    <span className="text-emerald-700 dark:text-emerald-400/80 text-xs font-bold mb-0.5 tracking-wider">總人數</span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-emerald-700 dark:text-emerald-400 text-xl font-black">{chartData.reduce((sum, d) => sum + d.Audience, 0).toLocaleString()}</span>
+                      <span className="text-emerald-700 dark:text-emerald-400/80 text-xs font-medium">人</span>
+                    </div>
+                  </div>
+
+                  {/* 平均年度勝率 */}
+                  {viewMode === 'homeTeam' && (
+                    <div className="bg-indigo-50 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 rounded-xl px-4 py-2 flex flex-col items-start shadow-sm transition-transform hover:-translate-y-0.5">
+                      <span className="text-indigo-700 dark:text-indigo-400/80 text-xs font-bold mb-0.5 tracking-wider">主場勝率</span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-indigo-700 dark:text-indigo-400 text-xl font-black">
                         {(() => {
                           const gamesWithResult = chartData.filter(d => d.HomeResult === '勝' || d.HomeResult === '敗');
                           if (gamesWithResult.length === 0) return '-';
@@ -1544,7 +1561,7 @@ export default function App() {
                 )}
                 
                 {/* 場均人數 (Highlighted) */}
-                <div className="col-span-2 md:col-span-1 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/40 dark:to-orange-900/40 border border-amber-200 dark:border-amber-800 rounded-xl px-5 py-2 flex flex-col items-start shadow-md relative overflow-hidden transition-transform hover:-translate-y-0.5">
+                <div className="w-full md:w-auto mt-2 xl:mt-0 xl:flex-1 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/40 dark:to-orange-900/40 border border-amber-200 dark:border-amber-800 rounded-xl px-5 py-2 flex flex-col items-start shadow-md relative overflow-hidden transition-transform hover:-translate-y-0.5">
                   <div className="absolute left-0 top-0 w-1.5 h-full bg-amber-400"></div>
                   <span className="text-amber-800/70 dark:text-amber-500 text-xs font-bold mb-0.5 tracking-wider">場均人數</span>
                   <div className="flex items-baseline gap-1">
