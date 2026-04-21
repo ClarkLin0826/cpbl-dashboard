@@ -45,6 +45,7 @@ export default function App() {
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<string>(searchParams.get('day') || 'All');
   const [selectedThemeFilter, setSelectedThemeFilter] = useState<string>(searchParams.get('theme') || 'All');
   const [selectedCheerleader, setSelectedCheerleader] = useState<string>(searchParams.get('cheer') || 'All');
+  const [selectedGameType, setSelectedGameType] = useState<string>(searchParams.get('gtype') || 'All');
   const [showNextWeek, setShowNextWeek] = useState(searchParams.get('nw') === 'true');
   const [sortMode, setSortMode] = useState<SortMode>((searchParams.get('sort') as SortMode) || 'date');
   
@@ -149,12 +150,13 @@ export default function App() {
     if (selectedDayOfWeek !== 'All') params.set('day', selectedDayOfWeek);
     if (selectedThemeFilter !== 'All') params.set('theme', selectedThemeFilter);
     if (selectedCheerleader !== 'All') params.set('cheer', selectedCheerleader);
+    if (selectedGameType !== 'All') params.set('gtype', selectedGameType);
     if (showNextWeek) params.set('nw', 'true');
     if (sortMode !== 'date') params.set('sort', sortMode);
     
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
-  }, [viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, showNextWeek, sortMode, isFirstLoad]);
+  }, [viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, showNextWeek, sortMode, isFirstLoad]);
 
   // Default to system preference if we don't have a saved one
   useEffect(() => {
@@ -178,6 +180,7 @@ export default function App() {
     setSelectedDayOfWeek('All');
     setSelectedThemeFilter('All');
     setSelectedCheerleader('All');
+    setSelectedGameType('All');
     setSelectedOption(''); // Reset selected option to trigger auto-select
     if (viewMode === 'matchup' || viewMode === 'cheerleaderWinRate') {
       setShowNextWeek(false);
@@ -287,6 +290,16 @@ export default function App() {
          else homeResult = '和';
       }
 
+      // Determine GameType (Regular vs Playoffs)
+      let gameType = (item as any).GameType || (item as any)['賽事類型'] || (item as any)['類別'] || '例行賽';
+      if (!item.GameType && !(item as any)['賽事類型'] && !(item as any)['類別'] && item.GameSno) {
+        const sno = item.GameSno.toString().toUpperCase();
+        if (sno.startsWith('C')) gameType = '台灣大賽';
+        else if (sno.startsWith('E')) gameType = '季後挑戰賽';
+        else if (sno.startsWith('G')) gameType = '明星賽';
+        else gameType = '例行賽';
+      }
+
       return {
         ...item,
         HomeTeam: homeTeam,
@@ -302,6 +315,7 @@ export default function App() {
         AwayScore: awayScore,
         HomeScore: homeScore,
         HomeResult: homeResult,
+        GameType: gameType
       };
     });
     
@@ -620,6 +634,11 @@ export default function App() {
                                (game.Cheerleaders && game.Cheerleaders.split(/[,、]/).map(c => c.trim()).includes(selectedCheerleader));
       if (!matchCheerleader) return false;
 
+      const matchGameType = selectedGameType === 'All' ? true :
+                            selectedGameType === 'Playoff' ? (game.GameType === '台灣大賽' || game.GameType === '季後挑戰賽' || game.GameType === '季後賽') :
+                            game.GameType === selectedGameType;
+      if (!matchGameType) return false;
+
       // Filter out games with 0 audience (assuming unplayed games) only in normal mode
       if (!showNextWeek && game.Audience === 0) return false;
 
@@ -662,7 +681,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, showNextWeek]);
+  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, showNextWeek]);
 
   const dataForYoY = useMemo(() => {
     return rawData.filter(game => {
@@ -690,11 +709,16 @@ export default function App() {
                                (game.Cheerleaders && game.Cheerleaders.split(/[,、]/).map(c => c.trim()).includes(selectedCheerleader));
       if (!matchCheerleader) return false;
 
+      const matchGameType = selectedGameType === 'All' ? true :
+                            selectedGameType === 'Playoff' ? (game.GameType === '台灣大賽' || game.GameType === '季後挑戰賽' || game.GameType === '季後賽') :
+                            game.GameType === selectedGameType;
+      if (!matchGameType) return false;
+
       if (game.Audience === 0) return false;
 
       return true;
     });
-  }, [rawData, viewMode, selectedOption, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, showNextWeek]);
+  }, [rawData, viewMode, selectedOption, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, showNextWeek]);
 
   const yearlyStats = useMemo(() => {
     if (dataForYoY.length === 0) return [];
@@ -1067,6 +1091,8 @@ export default function App() {
   const pointBackgroundColors = chartData.map(d => {
     const isMaxTemp = maxTemp !== null && d['MaxTemp(C)'] === maxTemp && maxTemp > 0;
     const isMaxRain = maxRain !== null && d['Rainfall(mm)'] === maxRain && maxRain > 0;
+    if (d.GameType === '台灣大賽') return '#eab308'; // gold
+    if (d.GameType === '季後挑戰賽') return '#10b981'; // emerald
     if (isMaxTemp && isMaxRain) return '#a855f7'; // purple
     if (isMaxTemp) return '#ef4444'; // red
     if (isMaxRain) return '#06b6d4'; // cyan
@@ -1075,17 +1101,21 @@ export default function App() {
   });
 
   const pointBorderColors = chartData.map(d => {
+    if (d.GameType === '台灣大賽') return '#000000'; // black border for taiwan series
+    if (d.GameType === '季後挑戰賽') return '#064e3b'; // dark green border for playoffs
     if (d.Theme) return '#fef3c7'; // light amber border for theme
     return '#ffffff'; // white border for others
   });
 
   const isMassiveData = chartData.length > 500;
 
-  const pointBorderWidths = chartData.map(d => d.Theme ? (isMassiveData ? 1 : 3) : (isMassiveData ? 0 : 2));
+  const pointBorderWidths = chartData.map(d => (d.GameType === '台灣大賽' || d.GameType === '季後挑戰賽' || d.Theme) ? (isMassiveData ? 1 : 3) : (isMassiveData ? 0 : 2));
 
   const pointRadii = chartData.map(d => {
     const isMaxTemp = maxTemp !== null && d['MaxTemp(C)'] === maxTemp && maxTemp > 0;
     const isMaxRain = maxRain !== null && d['Rainfall(mm)'] === maxRain && maxRain > 0;
+    if (d.GameType === '台灣大賽') return isMassiveData ? 4 : 10;
+    if (d.GameType === '季後挑戰賽') return isMassiveData ? 3 : 9;
     if (d.Theme) return isMassiveData ? 3 : 8;
     return (isMaxTemp || isMaxRain) ? (isMassiveData ? 2 : 6) : (isMassiveData ? 0 : 4);
   });
@@ -1383,6 +1413,21 @@ export default function App() {
             </select>
           </div>
 
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">賽事類型</label>
+            <select
+              value={selectedGameType}
+              onChange={(e) => setSelectedGameType(e.target.value)}
+              className="w-full p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="All">全部賽事 (含例行與季後賽)</option>
+              <option value="例行賽">例行賽</option>
+              <option value="Playoff">季後賽 (全部)</option>
+              <option value="季後挑戰賽">季後挑戰賽</option>
+              <option value="台灣大賽">台灣大賽</option>
+            </select>
+          </div>
+
           {(viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') && (
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">選擇啦啦隊</label>
@@ -1510,7 +1555,8 @@ export default function App() {
                   {selectedStadiumFilter !== 'All' && <span>📍 {selectedStadiumFilter}</span>}
                   {selectedDayOfWeek !== 'All' && <span>📅 {selectedDayOfWeek}</span>}
                   {selectedThemeFilter === 'ThemeOnly' && <span>⭐ 僅主題日</span>}
-                  {selectedThemeFilter === 'NormalOnly' && <span>⚾ 僅一般例行賽</span>}
+                  {selectedThemeFilter === 'NormalOnly' && <span>⚾ 僅無主題例行賽</span>}
+                  {selectedGameType !== 'All' && <span>🏆 {selectedGameType === 'Playoff' ? '僅季後賽' : selectedGameType}</span>}
                   {selectedCheerleader !== 'All' && <span>💃 {selectedCheerleader}</span>}
                 </div>
               </div>
@@ -1820,6 +1866,8 @@ export default function App() {
               <div className="flex flex-wrap items-center gap-4 mb-4 text-xs text-gray-600 dark:text-gray-300">
                 <div className="flex items-center"><span className="w-3 h-3 rounded-full bg-[#3b82f6] border-2 border-white mr-1.5 shadow-sm"></span>一般場次</div>
                 <div className="flex items-center"><span className="w-4 h-4 rounded-full bg-[#f59e0b] border-[3px] border-[#fef3c7] mr-1.5 shadow-sm"></span>主題日</div>
+                <div className="flex items-center"><span className="w-4 h-4 rounded-full bg-[#10b981] border-[3px] border-[#064e3b] mr-1.5 shadow-sm"></span>季後賽</div>
+                <div className="flex items-center"><span className="w-4 h-4 rounded-full bg-[#eab308] border-[3px] border-[#000000] mr-1.5 shadow-md"></span>台灣大賽</div>
                 <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#ef4444] border-2 border-white mr-1.5 shadow-sm"></span>最高氣溫</div>
                 <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#06b6d4] border-2 border-white mr-1.5 shadow-sm"></span>最高降雨量</div>
                 <div className="flex items-center"><span className="w-3.5 h-3.5 rounded-full bg-[#a855f7] border-2 border-white mr-1.5 shadow-sm"></span>最高溫且最高降雨</div>
@@ -1932,6 +1980,7 @@ export default function App() {
                             <span className="sm:hidden text-gray-400 scale-[0.85] origin-left">{game.Date.substring(0, 4)}</span>
                             <span className="sm:hidden font-semibold">{game.Date.substring(5)}</span>
                             <span className="hidden sm:inline">{game.Date}</span>
+                            {game.GameType !== '例行賽' && <div className="mt-0.5"><span className="text-[9px] bg-red-100 text-red-600 px-1 py-0.5 rounded leading-none inline-block">{game.GameType}</span></div>}
                           </div>
                         </td>
                         <td className="px-2 sm:px-3 py-3 font-medium text-gray-800 dark:text-gray-100 sticky left-[65px] sm:left-[100px] z-20 bg-white dark:bg-slate-800 group-hover:bg-blue-50/60 dark:group-hover:bg-slate-700 transition-colors shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)] w-[95px] min-w-[95px] max-w-[95px] sm:w-auto sm:min-w-[auto] sm:max-w-none overflow-hidden align-middle">
@@ -2014,6 +2063,10 @@ export default function App() {
             
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm">
+                <div className="col-span-2 flex items-center justify-between border-b dark:border-slate-700 pb-2">
+                  <span className="text-gray-500 dark:text-gray-400">賽事類型</span>
+                  <span className={`font-bold ${selectedGame.GameType === '例行賽' ? 'text-gray-700 dark:text-gray-300' : 'text-red-500 bg-red-50 dark:bg-red-900/20 px-2 rounded'}`}>{selectedGame.GameType || '例行賽'}</span>
+                </div>
                 <div className="col-span-2 flex items-center justify-between border-b dark:border-slate-700 pb-2">
                   <span className="text-gray-500 dark:text-gray-400">日期</span>
                   <span className="font-medium text-gray-900 dark:text-gray-100">{selectedGame.Date}</span>
