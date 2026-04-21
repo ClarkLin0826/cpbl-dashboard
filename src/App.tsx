@@ -86,29 +86,30 @@ export default function App() {
     setSelectedOption(newValue);
     setIsFirstLoad(false);
 
-    if (newValue === 'All') {
-      setStartYear('All');
-      setEndYear('All');
-    } else {
-      let activeGames: GameData[] = [];
-      if (viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') {
-        activeGames = rawData.filter(d => d.HomeTeam === newValue || d.AwayTeam === newValue);
-      } else if (viewMode === 'stadium') {
-        activeGames = rawData.filter(d => d.Stadium === newValue);
-      }
-      
-      if (activeGames.length > 0) {
-        // Collect all valid years (e.g., '2004' from '2004/05/11')
-        const years = activeGames
-          .map(d => parseInt(d.Date ? d.Date.substring(0, 4) : '0', 10))
-          .filter(y => y > 0 && !isNaN(y));
-          
-        if (years.length > 0) {
-          const minYear = Math.min(...years).toString();
-          const maxYear = Math.max(...years).toString();
-          
-          setStartYear(minYear);
-          setEndYear(maxYear);
+    // 不要對「各球場」套用自動選擇年份
+    if (viewMode !== 'stadium') {
+      if (newValue === 'All') {
+        setStartYear('All');
+        setEndYear('All');
+      } else {
+        let activeGames: GameData[] = [];
+        if (viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') {
+          activeGames = rawData.filter(d => d.HomeTeam === newValue || d.AwayTeam === newValue);
+        }
+        
+        if (activeGames.length > 0) {
+          // Collect all valid years (e.g., '2004' from '2004/05/11')
+          const years = activeGames
+            .map(d => parseInt(d.Date ? d.Date.substring(0, 4) : '0', 10))
+            .filter(y => y > 0 && !isNaN(y));
+            
+          if (years.length > 0) {
+            const minYear = Math.min(...years).toString();
+            const maxYear = Math.max(...years).toString();
+            
+            setStartYear(minYear);
+            setEndYear(maxYear);
+          }
         }
       }
     }
@@ -1183,7 +1184,7 @@ export default function App() {
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 ${darkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-gray-50 text-gray-900'}`}>
       {/* Header */}
-      <header className="bg-blue-700 dark:bg-slate-800 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-50 transition-colors duration-300">
+      <header className="bg-blue-700 dark:bg-slate-800 text-white px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] shadow-md flex justify-between items-center sticky top-0 z-[60] transition-colors duration-300">
         <div className="flex items-center gap-2">
           <BarChart2 className="w-6 h-6" />
           <h1 className="text-xl font-bold">中職票房分析</h1>
@@ -1978,7 +1979,10 @@ export default function App() {
 
       {/* Footer Disclaimer */}
       <footer className="w-full text-center pb-8 text-xs text-gray-400 dark:text-gray-500 max-w-7xl mx-auto px-4">
-        數據來源為公開資訊，本站為獨立數據統整平台，與官方無關
+        <p>數據來源為公開資訊，本站為獨立數據統整平台，與官方無關</p>
+        <p className="mt-1">
+          <a href="mailto:clarklin0826@gmail.com" className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline underline-offset-2">連絡開發者</a>
+        </p>
       </footer>
 
       {/* Game Details Modal */}
