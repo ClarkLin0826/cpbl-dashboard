@@ -65,6 +65,9 @@ export default function App() {
   const chartScrollContainerRef = useRef<HTMLDivElement>(null);
   const [visibleDataIndices, setVisibleDataIndices] = useState<[number, number] | null>(null);
 
+  const yoyScrollContainerRef = useRef<HTMLDivElement>(null);
+  const [visibleYoyIndices, setVisibleYoyIndices] = useState<[number, number] | null>(null);
+
   // Sync PWA theme colors to match the header exactly to prevent Android white line glitches
   useEffect(() => {
     // dynamically manage theme-color meta tag
@@ -776,7 +779,7 @@ export default function App() {
     }
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek]);
+  }, [rawData, viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek]);
 
   const yearlyStats = useMemo(() => {
     if (dataForYoY.length === 0) return [];
@@ -797,7 +800,7 @@ export default function App() {
       avg: Math.round(val.total / val.count)
     })).sort((a, b) => a.year.localeCompare(b.year));
 
-    return results.map((stat, i, arr) => {
+    const resultsWithGrowth = results.map((stat, i, arr) => {
       let growth: number | null = null;
       if (i > 0) {
         const prevYearStr = String(Number(stat.year) - 1);
@@ -808,7 +811,14 @@ export default function App() {
       }
       return { ...stat, growth };
     });
-  }, [dataForYoY]);
+
+    return resultsWithGrowth.filter(stat => {
+      let matchYear = true;
+      if (startYear !== 'All' && stat.year < startYear) matchYear = false;
+      if (endYear !== 'All' && stat.year > endYear) matchYear = false;
+      return matchYear;
+    });
+  }, [dataForYoY, startYear, endYear]);
 
   const cheerleaderStats = useMemo(() => {
     if (viewMode !== 'cheerleaderWinRate') return [];
@@ -858,16 +868,40 @@ export default function App() {
     setVisibleDataIndices([startIdx, endIdx]);
   }, [chartData.length]);
 
+  const updateYoyVisibleIndices = useCallback(() => {
+    if (!yoyScrollContainerRef.current || yearlyStats.length === 0) return;
+    const { scrollLeft, clientWidth, scrollWidth } = yoyScrollContainerRef.current;
+
+    // Safety check
+    if (scrollWidth <= clientWidth) {
+      setVisibleYoyIndices([0, yearlyStats.length - 1]);
+      return;
+    }
+
+    const startRatio = scrollLeft / scrollWidth;
+    const endRatio = (scrollLeft + clientWidth) / scrollWidth;
+
+    const startIdx = Math.max(0, Math.floor(startRatio * yearlyStats.length) - 1);
+    const endIdx = Math.min(yearlyStats.length - 1, Math.ceil(endRatio * yearlyStats.length) + 1);
+
+    setVisibleYoyIndices([startIdx, endIdx]);
+  }, [yearlyStats.length]);
+
   // Update indices when data changes or window resizes
   useEffect(() => {
     // Need a slight delay to allow React/ChartJS to render and define scrollWidth
-    const timer = setTimeout(updateVisibleIndices, 100);
+    const timer = setTimeout(() => {
+      updateVisibleIndices();
+      updateYoyVisibleIndices();
+    }, 100);
     window.addEventListener('resize', updateVisibleIndices);
+    window.addEventListener('resize', updateYoyVisibleIndices);
     return () => {
       clearTimeout(timer);
       window.removeEventListener('resize', updateVisibleIndices);
+      window.removeEventListener('resize', updateYoyVisibleIndices);
     };
-  }, [chartData.length, updateVisibleIndices, chartType]);
+  }, [chartData.length, yearlyStats.length, updateVisibleIndices, updateYoyVisibleIndices, chartType]);
 
   const exportChartImage = async () => {
     const chartContainer = document.getElementById('exportable-chart-area');
@@ -1891,7 +1925,11 @@ export default function App() {
                    </div>
 
                    {/* Scrollable Bar Area */}
-                   <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar flex min-w-0 h-[352px] -mt-[64px] -mb-[32px]">
+                   <div 
+                     className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar flex min-w-0 h-[352px] -mt-[64px] -mb-[32px]"
+                     ref={yoyScrollContainerRef}
+                     onScroll={updateYoyVisibleIndices}
+                   >
                      <div className="flex items-end gap-4 sm:gap-8 md:gap-12 px-6 sm:px-10 h-[352px] min-w-max pb-[34px]">
                        {yearlyStats.map((stat, idx) => {
                           const maxAvg = Math.max(...yearlyStats.map(s => s.avg), 1000);
@@ -1936,6 +1974,13 @@ export default function App() {
                  <table className="w-full text-center text-sm table-auto min-w-[500px]">
                     <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
                       <tr>
+                        <th colSpan={5} className="py-2 px-4 border-b border-gray-200 dark:border-slate-700 text-left text-xs bg-slate-100 dark:bg-slate-900/50">
+                          <div className="flex justify-between items-center w-full">
+                            <span>詳細數據清單 {visibleYoyIndices ? `(目前顯示 ${visibleYoyIndices[1] - visibleYoyIndices[0] + 1} 筆)` : ''}</span>
+                          </div>
+                        </th>
+                      </tr>
+                      <tr>
                         <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 whitespace-nowrap">年度</th>
                         <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 whitespace-nowrap">總場次</th>
                         <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 whitespace-nowrap">總數</th>
@@ -1944,7 +1989,10 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 bg-white dark:bg-slate-800">
-                      {[...yearlyStats].reverse().map(stat => (
+                      {[...yearlyStats]
+                        .slice(visibleYoyIndices?.[0] || 0, (visibleYoyIndices?.[1] || yearlyStats.length - 1) + 1)
+                        .reverse()
+                        .map(stat => (
                         <tr key={stat.year} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/30 transition-colors">
                           <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">{stat.year}</td>
                           <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.count} 場</td>
