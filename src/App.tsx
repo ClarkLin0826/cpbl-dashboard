@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -60,6 +60,9 @@ export default function App() {
   const [toastContent, setToastContent] = useState<{title: string, message: string, urlText?: string} | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [loadingTextIndex, setLoadingTextIndex] = useState(0);
+
+  const chartScrollContainerRef = useRef<HTMLDivElement>(null);
+  const [visibleDataIndices, setVisibleDataIndices] = useState<[number, number] | null>(null);
 
   // Sync PWA theme colors to match the header exactly to prevent Android white line glitches
   useEffect(() => {
@@ -777,6 +780,39 @@ export default function App() {
 
   const maxTemp = chartData.length > 0 ? Math.max(...chartData.map(d => d['MaxTemp(C)'])) : null;
   const maxRain = chartData.length > 0 ? Math.max(...chartData.map(d => d['Rainfall(mm)'])) : null;
+
+  const updateVisibleIndices = useCallback(() => {
+    if (!chartScrollContainerRef.current || chartData.length === 0) return;
+    const { scrollLeft, clientWidth, scrollWidth } = chartScrollContainerRef.current;
+    
+    // Safety check - if no scrollable area, everything is visible
+    if (scrollWidth <= clientWidth) {
+      setVisibleDataIndices([0, chartData.length - 1]);
+      return;
+    }
+    
+    // Roughly estimate visible indices based on scroll ratio
+    // Assume elements are roughly evenly spaced
+    const startRatio = scrollLeft / scrollWidth;
+    const endRatio = (scrollLeft + clientWidth) / scrollWidth;
+    
+    // Pad by 2 elements on each side so we don't cut off half-visible points
+    const startIdx = Math.max(0, Math.floor(startRatio * chartData.length) - 2);
+    const endIdx = Math.min(chartData.length - 1, Math.ceil(endRatio * chartData.length) + 2);
+    
+    setVisibleDataIndices([startIdx, endIdx]);
+  }, [chartData.length]);
+
+  // Update indices when data changes or window resizes
+  useEffect(() => {
+    // Need a slight delay to allow React/ChartJS to render and define scrollWidth
+    const timer = setTimeout(updateVisibleIndices, 100);
+    window.addEventListener('resize', updateVisibleIndices);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateVisibleIndices);
+    };
+  }, [chartData.length, updateVisibleIndices, chartType]);
 
   const exportChartImage = async () => {
     const chartContainer = document.getElementById('exportable-chart-area');
@@ -1917,7 +1953,11 @@ export default function App() {
                     />
                   </div>
                 )}
-                <div className="flex-1 overflow-x-auto custom-scrollbar">
+                <div 
+                  className="flex-1 overflow-x-auto custom-scrollbar" 
+                  ref={chartScrollContainerRef}
+                  onScroll={updateVisibleIndices}
+                >
                   <div className="relative h-[300px] md:h-[400px]" style={{ width: safeChartWidth }}>
                     <Line 
                       options={{
@@ -1940,43 +1980,44 @@ export default function App() {
               </div>
             </div>
           )}
-        </div>
 
-        {/* Data Grid Area */}
-        {!loading && chartData.length > 0 && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && chartType === 'trend' && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col mt-4">
-            <div className="p-4 border-b border-gray-100 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center">
-              <h2 className="text-sm font-bold text-gray-700 dark:text-gray-300">詳細數據清單</h2>
-              <span className="text-xs text-gray-400 font-medium">點擊列查看完整資訊</span>
-            </div>
-            <div className="overflow-x-auto max-h-[400px]">
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0 z-30 text-gray-500 dark:text-gray-400 font-semibold text-xs border-b border-gray-200 shadow-sm">
-                  <tr>
-                    <th className="px-2 sm:px-3 py-3 sticky left-0 z-40 bg-slate-50 dark:bg-slate-800 w-[65px] min-w-[65px] max-w-[65px] sm:w-[100px] sm:min-w-[100px] sm:max-w-[100px]">日期</th>
-                    <th className="px-2 sm:px-3 py-3 sticky left-[65px] sm:left-[100px] z-40 bg-slate-50 dark:bg-slate-800 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)] w-[95px] min-w-[95px] max-w-[95px] sm:w-auto sm:min-w-[auto] sm:max-w-none">對戰組合</th>
-                    <th className="px-4 py-3">球場</th>
-                    <th className="px-4 py-3 text-right">人數</th>
-                    <th className="px-4 py-3 text-center">氣象</th>
-                    <th className="px-4 py-3">主題日</th>
-                    <th className="px-4 py-3">啦啦隊</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {([...chartData].sort((a, b) => {
-                    // For the table, if sortMode is 'date', we want newest -> oldest for history
-                    // But for future week, we want oldest -> newest (closest upcoming first)
-                    if (sortMode === 'date') {
-                      const timeDiff = new Date(b.Date).getTime() - new Date(a.Date).getTime();
-                      if (timeDiff === 0) {
-                        const snoA = isNaN(Number(a.GameSno)) ? 0 : Number(a.GameSno);
-                        const snoB = isNaN(Number(b.GameSno)) ? 0 : Number(b.GameSno);
-                        return showNextWeek ? snoA - snoB : snoB - snoA;
+          {/* Data Grid Area inside exportable chart area */}
+          {!loading && chartData.length > 0 && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && chartType === 'trend' && (
+            <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col mt-4 ${isExporting ? '' : 'max-h-[400px]'}`}>
+              <div className="p-4 border-b border-gray-100 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center">
+                <h2 className="text-sm font-bold text-gray-700 dark:text-gray-300">詳細數據清單 {visibleDataIndices ? `(目前顯示 ${visibleDataIndices[1] - visibleDataIndices[0] + 1} 筆)` : ''}</h2>
+                <span className="text-xs text-gray-400 font-medium">點擊列查看完整資訊</span>
+              </div>
+              <div className={`overflow-x-auto ${isExporting ? 'overflow-y-visible' : 'overflow-y-auto w-full custom-scrollbar'}`}>
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0 z-30 text-gray-500 dark:text-gray-400 font-semibold text-xs border-b border-gray-200 shadow-sm">
+                    <tr>
+                      <th className="px-2 sm:px-3 py-3 sticky left-0 z-40 bg-slate-50 dark:bg-slate-800 w-[65px] min-w-[65px] max-w-[65px] sm:w-[100px] sm:min-w-[100px] sm:max-w-[100px]">日期</th>
+                      <th className="px-2 sm:px-3 py-3 sticky left-[65px] sm:left-[100px] z-40 bg-slate-50 dark:bg-slate-800 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.1)] w-[95px] min-w-[95px] max-w-[95px] sm:w-auto sm:min-w-[auto] sm:max-w-none">對戰組合</th>
+                      <th className="px-4 py-3">球場</th>
+                      <th className="px-4 py-3 text-right">人數</th>
+                      <th className="px-4 py-3 text-center">氣象</th>
+                      <th className="px-4 py-3">主題日</th>
+                      <th className="px-4 py-3">啦啦隊</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-slate-700/50">
+                    {([...chartData]
+                      .slice(visibleDataIndices?.[0] || 0, (visibleDataIndices?.[1] || chartData.length - 1) + 1)
+                      .sort((a, b) => {
+                      // For the table, if sortMode is 'date', we want newest -> oldest for history
+                      // But for future week, we want oldest -> newest (closest upcoming first)
+                      if (sortMode === 'date') {
+                        const timeDiff = new Date(b.Date).getTime() - new Date(a.Date).getTime();
+                        if (timeDiff === 0) {
+                          const snoA = isNaN(Number(a.GameSno)) ? 0 : Number(a.GameSno);
+                          const snoB = isNaN(Number(b.GameSno)) ? 0 : Number(b.GameSno);
+                          return showNextWeek ? snoA - snoB : snoB - snoA;
+                        }
+                        return showNextWeek ? -timeDiff : timeDiff;
                       }
-                      return showNextWeek ? -timeDiff : timeDiff;
-                    }
-                    return 0; // retain chartData ordering for other modes
-                  })).map((game, idx) => {
+                      return 0; // retain chartData ordering for other modes
+                    })).map((game, idx) => {
                     const isMaxTemp = maxTemp !== null && game['MaxTemp(C)'] === maxTemp && maxTemp > 0;
                     const isMaxRain = maxRain !== null && game['Rainfall(mm)'] === maxRain && maxRain > 0;
                     return (
@@ -2021,9 +2062,10 @@ export default function App() {
             </div>
           </div>
         )}
-          </>
-        )}
-      </main>
+        </div>
+        </>
+      )}
+    </main>
 
       {/* Sponsorship Section */}
       <div className="flex justify-center my-8 px-4">
