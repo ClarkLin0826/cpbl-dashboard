@@ -911,23 +911,35 @@ export default function App() {
     
     // Temporarily fix scroll position for html-to-image
     const scrollContainers = chartContainer.querySelectorAll('.overflow-x-auto');
-    const scrollState: { el: HTMLElement, transform: string, transition: string }[] = [];
+    const scrollState: { el: HTMLElement, marginLeft: string, transition: string, parent: HTMLElement, overflowX: string, overflowY: string }[] = [];
     
     scrollContainers.forEach(container => {
       const scrollLeft = container.scrollLeft;
-      if (scrollLeft > 0 && container.firstElementChild) {
+      const htmlElement = container as HTMLElement;
+      if (container.firstElementChild) {
         const inner = container.firstElementChild as HTMLElement;
         scrollState.push({ 
            el: inner, 
-           transform: inner.style.transform,
-           transition: inner.style.transition
+           marginLeft: inner.style.marginLeft,
+           transition: inner.style.transition,
+           parent: htmlElement,
+           overflowX: htmlElement.style.overflowX,
+           overflowY: htmlElement.style.overflowY
         });
         inner.style.transition = 'none';
-        inner.style.transform = `translateX(-${scrollLeft}px)`;
+        if (scrollLeft > 0) {
+          inner.style.marginLeft = `-${scrollLeft}px`;
+        }
+        // Force hide scrollbars for screenshot
+        htmlElement.style.overflowX = 'hidden';
+        htmlElement.style.overflowY = 'hidden';
       }
     });
 
     try {
+      // 確保 DOM 已經更新
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const blob = await toBlob(chartContainer, {
         backgroundColor: darkMode ? '#1e293b' : '#ffffff',
         pixelRatio: 2 // High resolution
@@ -1024,10 +1036,12 @@ export default function App() {
       });
       setTimeout(() => setToastContent(null), 5000);
     } finally {
-      // Revert scroll transforms
-      scrollState.forEach(({ el, transform, transition }) => {
-        el.style.transform = transform;
+      // Revert scroll transforms and styles
+      scrollState.forEach(({ el, marginLeft, transition, parent, overflowX, overflowY }) => {
+        el.style.marginLeft = marginLeft;
         el.style.transition = transition;
+        parent.style.overflowX = overflowX;
+        parent.style.overflowY = overflowY;
       });
       setIsExporting(false);
     }
@@ -1936,9 +1950,9 @@ export default function App() {
                           const tickMax = Math.ceil(maxAvg / 1000) * 1000;
                           const heightPercent = tickMax > 0 ? (stat.avg / tickMax) * 100 : 0;
                           return (
-                            <div key={stat.year} className="flex flex-col justify-end items-center gap-2 group relative w-10 sm:w-16 md:w-20 h-64 shrink-0 z-10 pointer-events-auto">
+                            <div key={stat.year} className="flex flex-col justify-end items-center group relative w-10 sm:w-16 md:w-20 shrink-0 z-10 pointer-events-auto h-[288px]">
                              {/* Tooltip visible on hover inside the bar area */}
-                         <div className="absolute -top-16 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 text-xs py-1.5 px-3 rounded shadow-lg pointer-events-none whitespace-nowrap z-10 flex flex-col items-center">
+                         <div className="absolute -top-16 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 text-xs py-1.5 px-3 rounded shadow-lg pointer-events-none whitespace-nowrap z-10 flex flex-col items-center z-50">
                             <span className="font-bold text-sm tracking-wide">{stat.avg.toLocaleString()} 人</span>
                             {stat.growth !== null && (
                               <span className={`text-[10px] mt-0.5 font-medium ${stat.growth > 0 ? 'text-emerald-400 dark:text-emerald-600' : stat.growth < 0 ? 'text-red-400 dark:text-red-500' : 'text-gray-300 dark:text-gray-600'}`}>
@@ -1948,7 +1962,7 @@ export default function App() {
                          </div>
                          
                          {/* Bar */}
-                         <div className="w-full flex-1 flex flex-col justify-end relative">
+                         <div className="w-full h-64 shrink-0 flex flex-col justify-end relative">
                            <div 
                              className="w-full bg-gradient-to-t from-blue-600 to-cyan-400 dark:from-blue-700 dark:to-cyan-500 rounded-t-lg transition-all duration-500 ease-out group-hover:brightness-110 shadow-sm relative overflow-hidden" 
                              style={{ height: `${Math.max(2, heightPercent)}%` }}
@@ -1958,7 +1972,7 @@ export default function App() {
                          </div>
                          
                          {/* X-axis Label */}
-                         <div className="absolute -bottom-8 whitespace-nowrap">
+                         <div className="whitespace-nowrap shrink-0 mt-3 h-5 flex items-end justify-center">
                            <span className="text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300">{stat.year}</span>
                          </div>
                       </div>
