@@ -1929,7 +1929,7 @@ export default function App() {
               {/* CSS Bar Chart */}
               <div className="w-full relative pb-10 pt-4">
                 
-                <div className="flex h-64 relative ml-8 sm:ml-12 border-l border-b border-gray-200 dark:border-slate-600 mt-12">
+                <div className="flex h-64 relative ml-8 sm:ml-12 border-l border-b border-gray-200 dark:border-slate-600 mt-24">
                    {/* Y-axis Guides and Ticks (Fixed outside scrolling area) */}
                    <div className="absolute left-0 top-0 w-full h-full flex flex-col justify-between pointer-events-none z-0">
                       {[100, 75, 50, 25, 0].map(percent => {
@@ -1950,11 +1950,11 @@ export default function App() {
 
                    {/* Scrollable Bar Area */}
                    <div 
-                     className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar flex min-w-0 h-[352px] -mt-[64px] -mb-[32px]"
+                     className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar flex min-w-0 h-[400px] -mt-[112px] -mb-[32px]"
                      ref={yoyScrollContainerRef}
                      onScroll={updateYoyVisibleIndices}
                    >
-                     <div className="flex items-end gap-4 sm:gap-8 md:gap-12 px-6 sm:px-10 h-[352px] min-w-max pb-[34px]">
+                     <div className="flex items-end gap-4 sm:gap-8 md:gap-12 px-6 sm:px-10 h-[400px] min-w-max pb-[34px]">
                        {yearlyStats.map((stat, idx) => {
                           const maxAvg = Math.max(...yearlyStats.map(s => s.avg), 1000);
                           const tickMax = Math.ceil(maxAvg / 1000) * 1000;
