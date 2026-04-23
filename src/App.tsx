@@ -60,6 +60,7 @@ export default function App() {
   const [chartType, setChartType] = useState<'trend' | 'yoy'>('trend');
   const [toastContent, setToastContent] = useState<{title: string, message: string, urlText?: string} | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportIncludeTable, setExportIncludeTable] = useState(false);
   const [loadingTextIndex, setLoadingTextIndex] = useState(0);
 
   const chartScrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1659,6 +1660,15 @@ export default function App() {
           </button>
 
           <div className="flex-1"></div>
+          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 font-medium cursor-pointer mx-2">
+             <input 
+               type="checkbox" 
+               checked={exportIncludeTable} 
+               onChange={(e) => setExportIncludeTable(e.target.checked)}
+               className="rounded border-gray-300 text-emerald-500 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+             />
+             <span>截圖包含清單</span>
+          </label>
           <button
             onClick={exportChartImage}
             disabled={chartData.length === 0 || isExporting}
@@ -1984,7 +1994,8 @@ export default function App() {
               </div>
 
               {/* Data Table */}
-              <div className="overflow-x-auto custom-scrollbar rounded-xl border border-gray-200 dark:border-slate-700 mx-auto w-full max-w-4xl shadow-sm">
+              {(!isExporting || exportIncludeTable) && (
+              <div className="overflow-x-auto custom-scrollbar rounded-xl border border-gray-200 dark:border-slate-700 mx-auto w-full max-w-4xl shadow-sm mt-4">
                  <table className="w-full text-center text-sm table-auto min-w-[500px]">
                     <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
                       <tr>
@@ -2034,6 +2045,7 @@ export default function App() {
                     </tbody>
                  </table>
               </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col flex-1 w-full">
@@ -2114,7 +2126,7 @@ export default function App() {
           )}
 
           {/* Data Grid Area inside exportable chart area */}
-          {!loading && chartData.length > 0 && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && chartType === 'trend' && (
+          {!loading && chartData.length > 0 && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && chartType === 'trend' && (!isExporting || exportIncludeTable) && (
             <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col mt-4 ${isExporting ? '' : 'max-h-[400px]'}`}>
               <div className="p-4 border-b border-gray-100 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center">
                 <h2 className="text-sm font-bold text-gray-700 dark:text-gray-300">詳細數據清單 {visibleDataIndices ? `(目前顯示 ${visibleDataIndices[1] - visibleDataIndices[0] + 1} 筆)` : ''}</h2>
