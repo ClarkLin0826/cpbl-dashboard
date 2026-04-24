@@ -26,7 +26,7 @@ ChartJS.register(
   Filler
 );
 
-type ViewMode = 'homeTeam' | 'stadium' | 'matchup' | 'cheerleaderWinRate';
+type ViewMode = 'homeTeam' | 'stadium' | 'matchup' | 'cheerleaderWinRate' | 'teamWinRate';
 type SortMode = 'date' | 'audienceDesc' | 'tempDesc' | 'rainAsc' | 'winRateDesc';
 
 export default function App() {
@@ -38,6 +38,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   
   const [viewMode, setViewMode] = useState<ViewMode>((searchParams.get('v') as ViewMode) || 'homeTeam');
+  const [winRateMode, setWinRateMode] = useState<'home' | 'away' | 'all'>((searchParams.get('cwrm') as 'home' | 'away' | 'all') || 'all');
   const [selectedOption, setSelectedOption] = useState<string>(searchParams.get('team') || '');
   const [startYear, setStartYear] = useState<string>(searchParams.get('sy') || 'All');
   const [endYear, setEndYear] = useState<string>(searchParams.get('ey') || 'All');
@@ -72,7 +73,7 @@ export default function App() {
   // Sync PWA theme colors to match the header exactly to prevent Android white line glitches
   useEffect(() => {
     // dynamically manage theme-color meta tag
-    let metaTheme = document.querySelector('meta[name="theme-color"]');
+    let metaTheme = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
     if (!metaTheme) {
       metaTheme = document.createElement('meta');
       metaTheme.name = 'theme-color';
@@ -125,6 +126,8 @@ export default function App() {
       } else {
         let activeGames: GameData[] = [];
         if (viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') {
+          activeGames = rawData.filter(d => d.HomeTeam === newValue);
+        } else if (viewMode === 'teamWinRate') {
           activeGames = rawData.filter(d => d.HomeTeam === newValue || d.AwayTeam === newValue);
         }
         
@@ -151,6 +154,7 @@ export default function App() {
     if (isFirstLoad) return;
     const params = new URLSearchParams();
     if (viewMode !== 'homeTeam') params.set('v', viewMode);
+    if (winRateMode !== 'home') params.set('cwrm', winRateMode);
     if (selectedOption) params.set('team', selectedOption);
     if (startYear !== 'All') params.set('sy', startYear);
     if (endYear !== 'All') params.set('ey', endYear);
@@ -192,7 +196,7 @@ export default function App() {
     setSelectedGameType('All');
     setSelectedGameLimit('');
     setSelectedOption(''); // Reset selected option to trigger auto-select
-    if (viewMode === 'matchup' || viewMode === 'cheerleaderWinRate') {
+    if (viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') {
       setShowNextWeek(false);
     }
   }, [viewMode]);
@@ -247,15 +251,37 @@ export default function App() {
       if (Array.isArray(data[key])) {
         data[key].forEach((item: GameData) => {
           if (!item.Date || !item.GameSno) return;
-          const year = item.Date.split('/')[0];
-          const normSno = isNaN(Number(item.GameSno)) ? item.GameSno : Number(item.GameSno);
+          const dateStr = String(item.Date).trim();
+          const yearMatch = dateStr.match(/(20\d{2})/);
+          let year = yearMatch ? yearMatch[1] : dateStr.split(/[\/\-]/)[0];
+          
+          let normSno = String(item.GameSno).trim().toUpperCase();
+          if (!isNaN(Number(normSno)) && normSno !== '') {
+            normSno = String(Number(normSno));
+          } else {
+            // Check if it's something like "例行賽 1"
+            const matchDigit = normSno.match(/\d+/);
+            if (matchDigit && (normSno.includes('例') || normSno.includes('一軍'))) {
+              normSno = String(Number(matchDigit[0]));
+            } else if (normSno.match(/^[A-Z]0*\d+$/)) {
+              // E.g., C01 -> C1, A012 -> 12 (A is regular season prefix in some sheets)
+              const letter = normSno.charAt(0);
+              const num = Number(normSno.substring(1));
+              if (letter === 'A') {
+                normSno = String(num);
+              } else {
+                normSno = `${letter}${num}`;
+              }
+            }
+          }
+          
           const uniqueKey = `${year}-${normSno}`;
           
           // Basic normalization beforehand for the matchup view specifically
           let homeTeam = item.HomeTeam || item['主場'];
           let awayTeam = item.AwayTeam || item['客場'];
           let stadium = item.Stadium || item['球場'];
-          const rawMatch = item.Matchup || item['對戰組合'] || '';
+          const rawMatch = (item as any).Matchup || item['對戰組合'] || '';
           
           if (rawMatch && (!homeTeam || !awayTeam || !stadium)) {
             const matchResult = rawMatch.match(/^(.+?)\s+v\.s\.\s+(.+?)\s+@(.+)$/);
@@ -318,9 +344,9 @@ export default function App() {
         Audience: Number(item.Audience) || 0,
         'MaxTemp(C)': Number(item['MaxTemp(C)']) || 0,
         'Rainfall(mm)': Number(item['Rainfall(mm)']) || 0,
-        'RainProb(%)': item['RainProb(%)'] !== undefined && item['RainProb(%)'] !== '' ? Number(item['RainProb(%)']) : undefined,
+        'RainProb(%)': item['RainProb(%)'] !== undefined && (item as any)['RainProb(%)'] !== '' ? Number(item['RainProb(%)']) : undefined,
         Theme: item.Theme || item['主題日'] || '',
-        Url: item.Url || item.URL || item['連結'] || '',
+        Url: item.Url || (item as any).URL || item['連結'] || '',
         Cheerleaders: item.Cheerleaders || item['啦啦隊'] || item['啦啦隊班表'] || '',
         AwayScore: awayScore,
         HomeScore: homeScore,
@@ -482,13 +508,23 @@ export default function App() {
     if (rawData.length === 0) return;
     const set = new Set<string>();
     rawData.forEach(game => {
-      if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') && game.HomeTeam) set.add(game.HomeTeam);
-      if (viewMode === 'stadium' && game.Stadium) set.add(game.Stadium);
+      if (viewMode === 'homeTeam') {
+        if (game.HomeTeam) set.add(game.HomeTeam);
+      } else if (viewMode === 'cheerleaderWinRate') {
+        if (game.HomeTeam) set.add(game.HomeTeam);
+      } else if (viewMode === 'teamWinRate') {
+        if (game.HomeTeam) set.add(game.HomeTeam);
+        if (game.AwayTeam) set.add(game.AwayTeam);
+      } else if (viewMode === 'stadium' && game.Stadium) {
+        set.add(game.Stadium);
+      }
     });
     const sortedOptions = Array.from(set).sort();
     
     if (!sortedOptions.includes(selectedOption) && sortedOptions.length > 0) {
-      if (viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') {
+      if (viewMode === 'teamWinRate' && selectedOption === 'All') {
+        // 'All' is a valid option for teamWinRate
+      } else if (viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') {
         const activeTeams = ['台鋼雄鷹', '中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將'];
         const foundActive = activeTeams.find(t => sortedOptions.includes(t));
         setSelectedOption(foundActive || sortedOptions[0]);
@@ -504,15 +540,23 @@ export default function App() {
     if (rawData.length === 0) return [];
     const set = new Set<string>();
     rawData.forEach(game => {
-      if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') && game.HomeTeam) set.add(game.HomeTeam);
-      if (viewMode === 'stadium' && game.Stadium) set.add(game.Stadium);
+      if (viewMode === 'homeTeam') {
+        if (game.HomeTeam) set.add(game.HomeTeam);
+      } else if (viewMode === 'cheerleaderWinRate') {
+        if (game.HomeTeam) set.add(game.HomeTeam);
+      } else if (viewMode === 'teamWinRate') {
+        if (game.HomeTeam) set.add(game.HomeTeam);
+        if (game.AwayTeam) set.add(game.AwayTeam);
+      } else if (viewMode === 'stadium' && game.Stadium) {
+        set.add(game.Stadium);
+      }
     });
     return Array.from(set).sort();
   }, [rawData, viewMode]);
 
   // Extract available years
   const availableYears = useMemo(() => {
-    const years = new Set(rawData.map(d => {
+    const years = new Set<string>(rawData.map(d => {
       if (!d.Date) return '';
       const match = String(d.Date).match(/^(\d{4})/);
       return match ? match[1] : '';
@@ -523,12 +567,12 @@ export default function App() {
   // Extract available stadiums for the selected team
   const availableStadiumsForTeam = useMemo(() => {
     if (viewMode === 'stadium') return ['All']; // If we are primarily selecting a stadium, the stadium combobox doesn't need to show everything twice
-    if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') && !selectedOption) return ['All'];
+    if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') && !selectedOption) return ['All'];
     
     const stadiums = new Set<string>();
     
     rawData.forEach(game => {
-      if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') && game.HomeTeam !== selectedOption) return;
+      if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') && game.HomeTeam !== selectedOption && game.AwayTeam !== selectedOption) return;
       if (!game.Date) return;
       
       const gameDate = new Date(game.Date);
@@ -551,7 +595,7 @@ export default function App() {
     });
     
     return ['All', ...Array.from(stadiums).sort()];
-  }, [rawData, viewMode, selectedOption, startYear, endYear, showNextWeek]);
+  }, [rawData, viewMode, selectedOption, startYear, endYear, showNextWeek, winRateMode]);
 
   // Extract available cheerleaders for the selected team
   const availableCheerleaders = useMemo(() => {
@@ -589,7 +633,7 @@ export default function App() {
     });
 
     return ['All', ...Array.from(cheerleadersSet).sort()];
-  }, [rawData, viewMode, selectedOption, startYear, endYear, showNextWeek, selectedStadiumFilter]);
+  }, [rawData, viewMode, selectedOption, startYear, endYear, showNextWeek, selectedStadiumFilter, winRateMode]);
 
   // Filter and sort data
   const chartData = useMemo(() => {
@@ -620,14 +664,31 @@ export default function App() {
         if (startYear !== 'All' && itemYear < startYear) matchYear = false;
         if (endYear !== 'All' && itemYear > endYear) matchYear = false;
         if (!matchYear) return false;
+        
+        if (game.Audience === 0) return false;
       }
       
       if (viewMode !== 'matchup') {
-        const matchView = (viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') ? game.HomeTeam === selectedOption : game.Stadium === selectedOption;
+        let matchView = false;
+        if (viewMode === 'stadium') {
+          matchView = game.Stadium === selectedOption;
+        } else if (viewMode === 'homeTeam') {
+          matchView = game.HomeTeam === selectedOption;
+        } else if (viewMode === 'cheerleaderWinRate') {
+          matchView = game.HomeTeam === selectedOption || selectedOption === 'All';
+        } else if (viewMode === 'teamWinRate') {
+          if (selectedOption === 'All') {
+            matchView = true;
+          } else {
+            if (winRateMode === 'home') matchView = game.HomeTeam === selectedOption;
+            else if (winRateMode === 'away') matchView = game.AwayTeam === selectedOption;
+            else matchView = (game.HomeTeam === selectedOption || game.AwayTeam === selectedOption);
+          }
+        }
         if (!matchView) return false;
       }
 
-      const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
+      const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
       if (!matchStadium) return false;
 
       const dayOfWeekMap = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -716,7 +777,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek]);
+  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
 
   const dataForYoY = useMemo(() => {
     let filtered = rawData.filter(game => {
@@ -724,11 +785,26 @@ export default function App() {
       if (showNextWeek) return false; // YoY doesn't apply to future weeks
 
       if (viewMode !== 'matchup') {
-        const matchView = (viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') ? game.HomeTeam === selectedOption : game.Stadium === selectedOption;
+        let matchView = false;
+        if (viewMode === 'stadium') {
+          matchView = game.Stadium === selectedOption;
+        } else if (viewMode === 'homeTeam') {
+          matchView = game.HomeTeam === selectedOption;
+        } else if (viewMode === 'cheerleaderWinRate') {
+          matchView = game.HomeTeam === selectedOption || selectedOption === 'All';
+        } else if (viewMode === 'teamWinRate') {
+          if (selectedOption === 'All') {
+            matchView = true;
+          } else {
+            if (winRateMode === 'home') matchView = game.HomeTeam === selectedOption;
+            else if (winRateMode === 'away') matchView = game.AwayTeam === selectedOption;
+            else matchView = (game.HomeTeam === selectedOption || game.AwayTeam === selectedOption);
+          }
+        }
         if (!matchView) return false;
       }
 
-      const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
+      const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
       if (!matchStadium) return false;
 
       const dayOfWeekMap = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -780,7 +856,7 @@ export default function App() {
     }
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek]);
+  }, [rawData, viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
 
   const yearlyStats = useMemo(() => {
     if (dataForYoY.length === 0) return [];
@@ -832,6 +908,7 @@ export default function App() {
       cheerleaders.forEach(c => {
          if (!stats[c]) stats[c] = { wins: 0, games: 0 };
          stats[c].games++;
+         
          if (game.HomeResult === '勝') {
             stats[c].wins++;
          }
@@ -843,6 +920,54 @@ export default function App() {
       .sort((a, b) => b.rate === a.rate ? b.games - a.games : b.rate - a.rate)
       .filter(d => d.games >= 5); // 至少 5 場才列入排行
   }, [chartData, viewMode]);
+
+  const teamStats = useMemo(() => {
+    if (viewMode !== 'teamWinRate') return [];
+    const stats: Record<string, { wins: number, losses: number, ties: number, games: number }> = {};
+    chartData.forEach(game => {
+      if (!game.HomeResult || (game.HomeResult !== '勝' && game.HomeResult !== '敗' && game.HomeResult !== '和')) return;
+
+      const updateStats = (team: string, isWin: boolean, isTie: boolean) => {
+         if (!stats[team]) stats[team] = { wins: 0, losses: 0, ties: 0, games: 0 };
+         stats[team].games++;
+         if (isTie) stats[team].ties++;
+         else if (isWin) stats[team].wins++;
+         else stats[team].losses++;
+      };
+
+      const homeWin = game.HomeResult === '勝';
+      const homeTie = game.HomeResult === '和';
+      const homeLoss = game.HomeResult === '敗';
+
+      if (selectedOption === 'All') {
+        if (winRateMode === 'home' || winRateMode === 'all') {
+           if (game.HomeTeam) updateStats(game.HomeTeam, homeWin, homeTie);
+        }
+        if (winRateMode === 'away' || winRateMode === 'all') {
+           if (game.AwayTeam) updateStats(game.AwayTeam, homeLoss, homeTie);
+        }
+      } else {
+        if ((winRateMode === 'home' || winRateMode === 'all') && game.HomeTeam === selectedOption) {
+           if (game.AwayTeam) updateStats(game.AwayTeam, homeWin, homeTie);
+        }
+        if ((winRateMode === 'away' || winRateMode === 'all') && game.AwayTeam === selectedOption) {
+           if (game.HomeTeam) updateStats(game.HomeTeam, homeLoss, homeTie);
+        }
+      }
+    });
+
+    return Object.entries(stats)
+      .map(([team, stat]) => ({
+        team,
+        wins: stat.wins,
+        losses: stat.losses,
+        ties: stat.ties,
+        games: stat.games,
+        effectiveGames: stat.wins + stat.losses, // ties don't count towards win rate calculation mathematically
+        rate: (stat.wins + stat.losses) > 0 ? (stat.wins / (stat.wins + stat.losses)) : 0
+      }))
+      .sort((a, b) => b.rate === a.rate ? b.games - a.games : b.rate - a.rate);
+  }, [chartData, viewMode, winRateMode, selectedOption]);
 
   const maxTemp = chartData.length > 0 ? Math.max(...chartData.map(d => d['MaxTemp(C)'])) : null;
   const maxRain = chartData.length > 0 ? Math.max(...chartData.map(d => d['Rainfall(mm)'])) : null;
@@ -1455,6 +1580,7 @@ export default function App() {
             >
               <option value="homeTeam">各隊主場人數</option>
               <option value="stadium">各球場人數</option>
+              <option value="teamWinRate">對戰各隊戰績勝率</option>
               <option value="cheerleaderWinRate">各隊啦啦隊勝率排行</option>
               <option value="matchup">對戰組合交叉分析</option>
             </select>
@@ -1463,13 +1589,16 @@ export default function App() {
           {viewMode !== 'matchup' && (
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {(viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') ? '選擇球隊' : '選擇球場'}
+                {(viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') ? '選擇球隊' : '選擇球場'}
               </label>
               <select
                 value={selectedOption}
                 onChange={(e) => handleOptionChange(e.target.value)}
                 className="w-full p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               >
+                {viewMode === 'teamWinRate' && (
+                  <option value="All">全部球隊</option>
+                )}
                 {options.map(opt => (
                   <option key={opt} value={opt}>{opt}</option>
                 ))}
@@ -1506,7 +1635,7 @@ export default function App() {
             </div>
           </div>
 
-          {(viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate') && (
+          {(viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') && (
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">選擇球場</label>
               <select
@@ -1601,7 +1730,7 @@ export default function App() {
 
         {/* Sorting */}
         <div className="flex flex-wrap gap-2 items-center">
-          {viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && (
+          {viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && (
             <>
               <button
                 onClick={() => {
@@ -1688,10 +1817,10 @@ export default function App() {
                 <div className="flex flex-col md:flex-row md:items-center gap-4">
                   <div className="flex items-center gap-3">
                     <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                      {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : viewMode === 'matchup' ? '對戰組合場均人數矩陣 (Heatmap)' : viewMode === 'cheerleaderWinRate' ? '啦啦隊主場勝率排名' : `${selectedOption} - 人數趨勢`}
+                       {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : viewMode === 'matchup' ? '對戰組合場均人數矩陣 (Heatmap)' : viewMode === 'teamWinRate' ? (selectedOption === 'All' ? `全聯盟戰績${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}勝率排行` : `${selectedOption} 對戰各隊${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}戰績勝率`) : viewMode === 'cheerleaderWinRate' ? `啦啦隊勝率排名` : `${selectedOption} - 人數趨勢`}
                       {loading && <span className="text-sm font-normal text-gray-400 animate-pulse">載入中...</span>}
                     </h2>
-                    {!showNextWeek && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && chartData.length > 0 && (
+                    {!showNextWeek && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && chartData.length > 0 && (
                       <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <button
                           onClick={() => setChartType('trend')}
@@ -1704,6 +1833,29 @@ export default function App() {
                           className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${chartType === 'yoy' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
                         >
                           年度比較
+                        </button>
+                      </div>
+                    )}
+                    
+                    {!showNextWeek && viewMode === 'teamWinRate' && chartData.length > 0 && (
+                      <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
+                        <button
+                          onClick={() => setWinRateMode('home')}
+                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${winRateMode === 'home' ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                        >
+                          主場賽事
+                        </button>
+                        <button
+                          onClick={() => setWinRateMode('away')}
+                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${winRateMode === 'away' ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                        >
+                          客場賽事
+                        </button>
+                        <button
+                          onClick={() => setWinRateMode('all')}
+                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${winRateMode === 'all' ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                        >
+                          全部賽事
                         </button>
                       </div>
                     )}
@@ -1860,13 +2012,99 @@ export default function App() {
                 格子內數字為「場均觀眾數」，下方小括號表示符合條件的有效賽事總場次。
               </div>
             </div>
+          ) : viewMode === 'teamWinRate' ? (
+            <div className="flex flex-col flex-1 w-full bg-white dark:bg-slate-800 p-2 md:p-6 mb-2">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 text-center">
+                {selectedOption === 'All' ? `全聯盟戰績${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}勝率排行` : `${selectedOption} 對戰各隊${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}戰績勝率`}
+              </h3>
+              <div className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
+                計算方式為有效比賽之勝場數除以（勝場＋敗場），和局不計入勝率計算。
+              </div>
+
+              {teamStats.length === 0 ? (
+                <div className="text-center text-gray-400 py-10">目前沒有符合條件的戰績資料。</div>
+              ) : (
+                <div className="w-full sm:w-fit max-w-full mx-auto mb-4 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg flex flex-col md:flex-row items-center justify-around gap-4 border border-gray-100 dark:border-slate-600 shadow-sm">
+                  <div className="text-center">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">有效出賽</div>
+                    <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{teamStats.reduce((acc, curr) => acc + curr.games, 0)}<span className="text-sm font-normal text-slate-500 ml-1">場</span></div>
+                  </div>
+                  <div className="hidden md:block w-px h-10 bg-gray-200 dark:bg-slate-600"></div>
+                  <div className="text-center">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">總戰績</div>
+                    <div className="text-2xl font-bold text-slate-800 dark:text-slate-100">{teamStats.reduce((acc, curr) => acc + curr.wins, 0)}勝 {teamStats.reduce((acc, curr) => acc + curr.losses, 0)}敗 {teamStats.reduce((acc, curr) => acc + curr.ties, 0)}和</div>
+                  </div>
+                  <div className="hidden md:block w-px h-10 bg-gray-200 dark:bg-slate-600"></div>
+                  <div className="text-center">
+                    <div className="text-xs text-slate-500 dark:text-gray-400 font-medium mb-1">總勝率</div>
+                    <div className="text-3xl font-black text-rose-500 dark:text-rose-400">
+                      {(() => {
+                        const totalWins = teamStats.reduce((acc, curr) => acc + curr.wins, 0);
+                        const totalLosses = teamStats.reduce((acc, curr) => acc + curr.losses, 0);
+                        const totalEffective = totalWins + totalLosses;
+                        const rate = totalEffective > 0 ? totalWins / totalEffective : 0;
+                        return totalEffective > 0 ? (rate === 1 ? '1.000' : rate.toFixed(3).replace(/^0+/, '')) : '.000';
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {teamStats.length > 0 && (
+                <div className="w-full sm:w-fit max-w-full overflow-x-auto custom-scrollbar rounded-xl border border-gray-200 dark:border-slate-700 mx-auto shadow-sm">
+                  <table className="w-full sm:w-auto text-center text-sm table-auto min-w-[500px]">
+                    <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
+                      <tr>
+                        <th className="py-3 px-2 font-bold border-b border-gray-200 dark:border-slate-700 w-16 whitespace-nowrap">排名</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 text-left sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 whitespace-nowrap shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">{selectedOption === 'All' ? '球隊名稱' : '對戰對手'}</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">出賽</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">勝-敗-和</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">勝率</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 bg-white dark:bg-slate-800">
+                      {teamStats.map((stat, idx) => (
+                        <tr key={stat.team} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                          <td className="py-3 px-2 font-bold text-gray-400 dark:text-gray-500 whitespace-nowrap">#{idx + 1}</td>
+                          <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 text-left sticky left-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-blue-50/50 dark:group-hover:bg-slate-700/30 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)] whitespace-nowrap">{stat.team}</td>
+                          <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.games}</td>
+                          <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.wins}-{stat.losses}-{stat.ties}</td>
+                          <td className="py-3 px-4 text-rose-500 dark:text-rose-400 font-bold text-lg whitespace-nowrap">
+                            {stat.effectiveGames > 0 ? (stat.rate === 1 ? '1.000' : stat.rate.toFixed(3).replace(/^0+/, '')) : '.000'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-slate-50 dark:bg-slate-800/80 border-t-2 border-gray-200 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-300">
+                      <tr>
+                        <td colSpan={2} className="py-3 px-4 text-right sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">總和</td>
+                        <td className="py-3 px-4 whitespace-nowrap text-center">
+                          {teamStats.reduce((acc, curr) => acc + curr.games, 0)}
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap text-center">
+                          {teamStats.reduce((acc, curr) => acc + curr.wins, 0)}-{teamStats.reduce((acc, curr) => acc + curr.losses, 0)}-{teamStats.reduce((acc, curr) => acc + curr.ties, 0)}
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap text-center text-rose-600 dark:text-rose-400 text-lg">
+                          {(() => {
+                            const totalWins = teamStats.reduce((acc, curr) => acc + curr.wins, 0);
+                            const totalLosses = teamStats.reduce((acc, curr) => acc + curr.losses, 0);
+                            const totalEffective = totalWins + totalLosses;
+                            const rate = totalEffective > 0 ? totalWins / totalEffective : 0;
+                            return totalEffective > 0 ? (rate === 1 ? '1.000' : rate.toFixed(3).replace(/^0+/, '')) : '.000';
+                          })()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
           ) : viewMode === 'cheerleaderWinRate' ? (
             <div className="flex flex-col flex-1 w-full bg-white dark:bg-slate-800 p-2 md:p-6 mb-2">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 text-center">
-                {selectedOption === 'All' ? '全聯盟啦啦隊主場勝率排行' : `${selectedOption} 啦啦隊主場勝率排行`}
+                {selectedOption === 'All' ? '全聯盟啦啦隊勝率排行' : `${selectedOption} 啦啦隊勝率排行`}
               </h3>
               <div className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
-                計算方式為主場勝場數除以總場次（至少參與 5 場）
+                計算方式為所屬隊伍單場勝場數除以總參與場次（至少參與 5 場）
               </div>
 
               {cheerleaderStats.length === 0 ? (
@@ -1879,7 +2117,7 @@ export default function App() {
                         <th className="py-3 px-2 font-bold border-b border-gray-200 dark:border-slate-700 w-16 whitespace-nowrap">排名</th>
                         <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 text-left sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 whitespace-nowrap shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">啦啦隊名稱</th>
                         <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">參與場次</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">主場隊伍勝</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">勝場次</th>
                         <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">勝率</th>
                       </tr>
                     </thead>
@@ -2126,7 +2364,7 @@ export default function App() {
           )}
 
           {/* Data Grid Area inside exportable chart area */}
-          {!loading && chartData.length > 0 && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && chartType === 'trend' && (!isExporting || exportIncludeTable) && (
+          {!loading && chartData.length > 0 && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && chartType === 'trend' && (!isExporting || exportIncludeTable) && (
             <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col mt-4 ${isExporting ? '' : 'max-h-[400px]'}`}>
               <div className="p-4 border-b border-gray-100 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center">
                 <h2 className="text-sm font-bold text-gray-700 dark:text-gray-300">詳細數據清單 {visibleDataIndices ? `(目前顯示 ${visibleDataIndices[1] - visibleDataIndices[0] + 1} 筆)` : ''}</h2>
