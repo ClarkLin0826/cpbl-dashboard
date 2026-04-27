@@ -1837,7 +1837,7 @@ export default function App() {
                       </div>
                     )}
                     
-                    {!showNextWeek && viewMode === 'teamWinRate' && chartData.length > 0 && (
+                    {!showNextWeek && viewMode === 'teamWinRate' && (
                       <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <button
                           onClick={() => setWinRateMode('home')}
