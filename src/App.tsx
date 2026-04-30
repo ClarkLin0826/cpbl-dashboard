@@ -51,6 +51,7 @@ export default function App() {
   const [selectedGameLimit, setSelectedGameLimit] = useState<string>(searchParams.get('limit') || '');
   const [showNextWeek, setShowNextWeek] = useState(searchParams.get('nw') === 'true');
   const [sortMode, setSortMode] = useState<SortMode>((searchParams.get('sort') as SortMode) || 'date');
+  const [teamWinRateChartType, setTeamWinRateChartType] = useState<'table' | 'monthlyLine'>((searchParams.get('twrct') as 'table' | 'monthlyLine') || 'table');
   
   const [selectedGame, setSelectedGame] = useState<GameData | null>(null);
   const [igMapping, setIgMapping] = useState<Record<string, string>>({});
@@ -168,10 +169,11 @@ export default function App() {
     if (selectedGameLimit !== '') params.set('limit', selectedGameLimit);
     if (showNextWeek) params.set('nw', 'true');
     if (sortMode !== 'date') params.set('sort', sortMode);
+    if (teamWinRateChartType !== 'table') params.set('twrct', teamWinRateChartType);
     
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
-  }, [viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad]);
+  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType]);
 
   // Default to system preference if we don't have a saved one
   useEffect(() => {
@@ -978,6 +980,79 @@ export default function App() {
       }))
       .sort((a, b) => b.rate === a.rate ? b.games - a.games : b.rate - a.rate);
   }, [chartData, viewMode, winRateMode, selectedOption]);
+
+  const monthlyWinRateStats = useMemo(() => {
+    if (viewMode !== 'teamWinRate' || teamWinRateChartType !== 'monthlyLine') return null;
+
+    const targetTeams = selectedOption === 'All' 
+       ? ['台鋼雄鷹', '中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將'] 
+       : [selectedOption];
+
+    const stats: Record<string, Record<string, { wins: number, losses: number }>> = {};
+    targetTeams.forEach(t => stats[t] = {});
+
+    chartData.forEach(game => {
+      if (!game.Date || !game.HomeResult || (game.HomeResult !== '勝' && game.HomeResult !== '敗' && game.HomeResult !== '和')) return;
+      const t = new Date(game.Date);
+      const month = String(t.getMonth() + 1).padStart(2, '0');
+
+      const homeWin = game.HomeResult === '勝';
+      const homeLoss = game.HomeResult === '敗';
+
+      const updateStats = (team: string, isWin: boolean, isLoss: boolean) => {
+        if (!stats[team]) return;
+        if (!stats[team][month]) stats[team][month] = { wins: 0, losses: 0 };
+        if (isWin) stats[team][month].wins++;
+        if (isLoss) stats[team][month].losses++;
+      };
+
+      if (winRateMode === 'home' || winRateMode === 'all') {
+         if (game.HomeTeam && targetTeams.includes(game.HomeTeam)) {
+            updateStats(game.HomeTeam, homeWin, homeLoss);
+         }
+      }
+      if (winRateMode === 'away' || winRateMode === 'all') {
+         if (game.AwayTeam && targetTeams.includes(game.AwayTeam)) {
+            updateStats(game.AwayTeam, homeLoss, homeWin);
+         }
+      }
+    });
+
+    const months = ['03', '04', '05', '06', '07', '08', '09', '10', '11'];
+    
+    const colors: Record<string, string> = {
+      '中信兄弟': '#FFD700',
+      '味全龍': '#E30022',
+      '統一7-ELEVEn獅': '#F47920',
+      '樂天桃猿': '#7F152E',
+      '富邦悍將': '#004A9C',
+      '台鋼雄鷹': '#006B54'
+    };
+
+    const datasets = targetTeams.map(team => {
+      const data = months.map(m => {
+        const s = stats[team][m];
+        if (!s || (s.wins + s.losses) === 0) return null;
+        return s.wins / (s.wins + s.losses);
+      });
+      return {
+        label: team,
+        data,
+        borderColor: colors[team] || '#666',
+        backgroundColor: colors[team] || '#666',
+        tension: 0.3,
+        spanGaps: true,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        borderWidth: 2
+      };
+    });
+
+    return {
+      labels: months.map(m => `${parseInt(m, 10)}月`),
+      datasets
+    };
+  }, [chartData, viewMode, teamWinRateChartType, selectedOption, winRateMode]);
 
   const maxTemp = chartData.length > 0 ? Math.max(...chartData.map(d => d['MaxTemp(C)'])) : null;
   const maxRain = chartData.length > 0 ? Math.max(...chartData.map(d => d['Rainfall(mm)'])) : null;
@@ -1868,25 +1943,41 @@ export default function App() {
                     )}
                     
                     {!showNextWeek && viewMode === 'teamWinRate' && (
-                      <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
-                        <button
-                          onClick={() => setWinRateMode('home')}
-                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${winRateMode === 'home' ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                        >
-                          主場賽事
-                        </button>
-                        <button
-                          onClick={() => setWinRateMode('away')}
-                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${winRateMode === 'away' ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                        >
-                          客場賽事
-                        </button>
-                        <button
-                          onClick={() => setWinRateMode('all')}
-                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${winRateMode === 'all' ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                        >
-                          全部賽事
-                        </button>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
+                          <button
+                            onClick={() => setTeamWinRateChartType('table')}
+                            className={`whitespace-nowrap px-3 py-1 rounded-md text-sm font-medium transition-colors ${teamWinRateChartType === 'table' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                          >
+                            對戰總結
+                          </button>
+                          <button
+                            onClick={() => setTeamWinRateChartType('monthlyLine')}
+                            className={`whitespace-nowrap px-3 py-1 rounded-md text-sm font-medium transition-colors ${teamWinRateChartType === 'monthlyLine' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                          >
+                            單月勝率
+                          </button>
+                        </div>
+                        <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
+                          <button
+                            onClick={() => setWinRateMode('home')}
+                            className={`whitespace-nowrap px-3 py-1 rounded-md text-sm font-medium transition-colors ${winRateMode === 'home' ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                          >
+                            主場賽事
+                          </button>
+                          <button
+                            onClick={() => setWinRateMode('away')}
+                            className={`whitespace-nowrap px-3 py-1 rounded-md text-sm font-medium transition-colors ${winRateMode === 'away' ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                          >
+                            客場賽事
+                          </button>
+                          <button
+                            onClick={() => setWinRateMode('all')}
+                            className={`whitespace-nowrap px-3 py-1 rounded-md text-sm font-medium transition-colors ${winRateMode === 'all' ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                          >
+                            全部賽事
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2080,53 +2171,134 @@ export default function App() {
                   </div>
                 </div>
               )}
-              {teamStats.length > 0 && (
-                <div className="w-full sm:w-fit max-w-full overflow-x-auto custom-scrollbar rounded-xl border border-gray-200 dark:border-slate-700 mx-auto shadow-sm">
-                  <table className="w-full sm:w-auto text-center text-sm table-auto min-w-[500px]">
-                    <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
-                      <tr>
-                        <th className="py-3 px-2 font-bold border-b border-gray-200 dark:border-slate-700 w-16 whitespace-nowrap">排名</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 text-left sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 whitespace-nowrap shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">{selectedOption === 'All' ? '球隊名稱' : '對戰對手'}</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">出賽</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">勝-敗-和</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">勝率</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 bg-white dark:bg-slate-800">
-                      {teamStats.map((stat, idx) => (
-                        <tr key={stat.team} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/30 transition-colors">
-                          <td className="py-3 px-2 font-bold text-gray-400 dark:text-gray-500 whitespace-nowrap">#{idx + 1}</td>
-                          <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 text-left sticky left-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-blue-50/50 dark:group-hover:bg-slate-700/30 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)] whitespace-nowrap">{stat.team}</td>
-                          <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.games}</td>
-                          <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.wins}-{stat.losses}-{stat.ties}</td>
-                          <td className="py-3 px-4 text-rose-500 dark:text-rose-400 font-bold text-lg whitespace-nowrap">
-                            {stat.effectiveGames > 0 ? (stat.rate === 1 ? '1.000' : stat.rate.toFixed(3).replace(/^0+/, '')) : '.000'}
+              {teamWinRateChartType === 'table' ? (
+                teamStats.length > 0 && (
+                  <div className="w-full sm:w-fit max-w-full overflow-x-auto custom-scrollbar rounded-xl border border-gray-200 dark:border-slate-700 mx-auto shadow-sm">
+                    <table className="w-full sm:w-auto text-center text-sm table-auto min-w-[500px]">
+                      <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
+                        <tr>
+                          <th className="py-3 px-2 font-bold border-b border-gray-200 dark:border-slate-700 w-16 whitespace-nowrap">排名</th>
+                          <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 text-left sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 whitespace-nowrap shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">{selectedOption === 'All' ? '球隊名稱' : '對戰對手'}</th>
+                          <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">出賽</th>
+                          <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">勝-敗-和</th>
+                          <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">勝率</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 bg-white dark:bg-slate-800">
+                        {teamStats.map((stat, idx) => (
+                          <tr key={stat.team} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                            <td className="py-3 px-2 font-bold text-gray-400 dark:text-gray-500 whitespace-nowrap">#{idx + 1}</td>
+                            <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 text-left sticky left-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-blue-50/50 dark:group-hover:bg-slate-700/30 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)] whitespace-nowrap">{stat.team}</td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.games}</td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.wins}-{stat.losses}-{stat.ties}</td>
+                            <td className="py-3 px-4 text-rose-500 dark:text-rose-400 font-bold text-lg whitespace-nowrap">
+                              {stat.effectiveGames > 0 ? (stat.rate === 1 ? '1.000' : stat.rate.toFixed(3).replace(/^0+/, '')) : '.000'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-50 dark:bg-slate-800/80 border-t-2 border-gray-200 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-300">
+                        <tr>
+                          <td colSpan={2} className="py-3 px-4 text-right sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">總和</td>
+                          <td className="py-3 px-4 whitespace-nowrap text-center">
+                            {teamStats.reduce((acc, curr) => acc + curr.games, 0)}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap text-center">
+                            {teamStats.reduce((acc, curr) => acc + curr.wins, 0)}-{teamStats.reduce((acc, curr) => acc + curr.losses, 0)}-{teamStats.reduce((acc, curr) => acc + curr.ties, 0)}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap text-center text-rose-600 dark:text-rose-400 text-lg">
+                            {(() => {
+                              const totalWins = teamStats.reduce((acc, curr) => acc + curr.wins, 0);
+                              const totalLosses = teamStats.reduce((acc, curr) => acc + curr.losses, 0);
+                              const totalEffective = totalWins + totalLosses;
+                              const rate = totalEffective > 0 ? totalWins / totalEffective : 0;
+                              return totalEffective > 0 ? (rate === 1 ? '1.000' : rate.toFixed(3).replace(/^0+/, '')) : '.000';
+                            })()}
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-slate-50 dark:bg-slate-800/80 border-t-2 border-gray-200 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-300">
-                      <tr>
-                        <td colSpan={2} className="py-3 px-4 text-right sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">總和</td>
-                        <td className="py-3 px-4 whitespace-nowrap text-center">
-                          {teamStats.reduce((acc, curr) => acc + curr.games, 0)}
-                        </td>
-                        <td className="py-3 px-4 whitespace-nowrap text-center">
-                          {teamStats.reduce((acc, curr) => acc + curr.wins, 0)}-{teamStats.reduce((acc, curr) => acc + curr.losses, 0)}-{teamStats.reduce((acc, curr) => acc + curr.ties, 0)}
-                        </td>
-                        <td className="py-3 px-4 whitespace-nowrap text-center text-rose-600 dark:text-rose-400 text-lg">
-                          {(() => {
-                            const totalWins = teamStats.reduce((acc, curr) => acc + curr.wins, 0);
-                            const totalLosses = teamStats.reduce((acc, curr) => acc + curr.losses, 0);
-                            const totalEffective = totalWins + totalLosses;
-                            const rate = totalEffective > 0 ? totalWins / totalEffective : 0;
-                            return totalEffective > 0 ? (rate === 1 ? '1.000' : rate.toFixed(3).replace(/^0+/, '')) : '.000';
-                          })()}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                      </tfoot>
+                    </table>
+                  </div>
+                )
+              ) : (
+                monthlyWinRateStats && monthlyWinRateStats.datasets.some(d => d.data.some(v => v !== null)) ? (
+                  <div className="w-full mx-auto bg-white dark:bg-slate-800 p-2 sm:p-4 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+                    <div className="h-[400px] w-full">
+                      <Line
+                        data={{
+                          labels: monthlyWinRateStats.labels,
+                          datasets: monthlyWinRateStats.datasets.filter(d => d.data.some(v => v !== null))
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          interaction: {
+                            mode: 'index',
+                            intersect: false,
+                          },
+                          plugins: {
+                            legend: {
+                              position: 'bottom',
+                              labels: {
+                                usePointStyle: true,
+                                padding: 20,
+                                font: {
+                                  family: "'Inter', 'Noto Sans TC', sans-serif",
+                                  size: 13
+                                },
+                                color: darkMode ? '#94a3b8' : '#475569'
+                              }
+                            },
+                            tooltip: {
+                              backgroundColor: darkMode ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+                              titleColor: darkMode ? '#f1f5f9' : '#0f172a',
+                              bodyColor: darkMode ? '#cbd5e1' : '#334155',
+                              borderColor: darkMode ? 'rgba(51, 65, 85, 0.5)' : '#e2e8f0',
+                              borderWidth: 1,
+                              padding: 12,
+                              titleFont: { size: 14, weight: 'bold' },
+                              bodyFont: { size: 13 },
+                              boxPadding: 6,
+                              usePointStyle: true,
+                              callbacks: {
+                                label: function(context: any) {
+                                  const val = context.raw as number;
+                                  return `${context.dataset.label}: ${val === 1 ? '1.000' : val.toFixed(3).replace(/^0+/, '')}`;
+                                }
+                              }
+                            }
+                          },
+                          scales: {
+                            x: {
+                              grid: {
+                                display: false,
+                              },
+                              ticks: {
+                                color: darkMode ? '#94a3b8' : '#64748b'
+                              }
+                            },
+                            y: {
+                              min: 0,
+                              max: 1.0,
+                              grid: {
+                                color: darkMode ? 'rgba(51, 65, 85, 0.5)' : '#f1f5f9',
+                              },
+                              ticks: {
+                                padding: 10,
+                                color: darkMode ? '#94a3b8' : '#64748b',
+                                callback: function(value) {
+                                  return value === 1 ? '1.000' : typeof value === 'number' ? value.toFixed(3).replace(/^0+/, '') : value;
+                                }
+                              }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-400 py-10">目前沒有符合條件的單月戰績資料。</div>
+                )
               )}
             </div>
           ) : viewMode === 'cheerleaderWinRate' ? (
