@@ -44,6 +44,7 @@ export default function App() {
   const [endYear, setEndYear] = useState<string>(searchParams.get('ey') || 'All');
   const [selectedStadiumFilter, setSelectedStadiumFilter] = useState<string>(searchParams.get('stad') || 'All');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<string>(searchParams.get('day') || 'All');
+  const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>(searchParams.get('month') || 'All');
   const [selectedThemeFilter, setSelectedThemeFilter] = useState<string>(searchParams.get('theme') || 'All');
   const [selectedCheerleader, setSelectedCheerleader] = useState<string>(searchParams.get('cheer') || 'All');
   const [selectedGameType, setSelectedGameType] = useState<string>(searchParams.get('gtype') || 'All');
@@ -160,6 +161,7 @@ export default function App() {
     if (endYear !== 'All') params.set('ey', endYear);
     if (selectedStadiumFilter !== 'All') params.set('stad', selectedStadiumFilter);
     if (selectedDayOfWeek !== 'All') params.set('day', selectedDayOfWeek);
+    if (selectedMonthFilter !== 'All') params.set('month', selectedMonthFilter);
     if (selectedThemeFilter !== 'All') params.set('theme', selectedThemeFilter);
     if (selectedCheerleader !== 'All') params.set('cheer', selectedCheerleader);
     if (selectedGameType !== 'All') params.set('gtype', selectedGameType);
@@ -169,7 +171,7 @@ export default function App() {
     
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
-  }, [viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad]);
+  }, [viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad]);
 
   // Default to system preference if we don't have a saved one
   useEffect(() => {
@@ -191,6 +193,7 @@ export default function App() {
     // Preserve year bounds to avoid sudden resets when flipping viewMode
     setSelectedStadiumFilter('All');
     setSelectedDayOfWeek('All');
+    setSelectedMonthFilter('All');
     setSelectedThemeFilter('All');
     setSelectedCheerleader('All');
     setSelectedGameType('All');
@@ -696,6 +699,9 @@ export default function App() {
       const matchDay = selectedDayOfWeek === 'All' || dayStr === selectedDayOfWeek;
       if (!matchDay) return false;
 
+      const matchMonth = selectedMonthFilter === 'All' || String(gameDate.getMonth() + 1).padStart(2, '0') === selectedMonthFilter;
+      if (!matchMonth) return false;
+
       const matchTheme = selectedThemeFilter === 'All' ? true :
                          selectedThemeFilter === 'ThemeOnly' ? !!game.Theme :
                          !game.Theme;
@@ -777,7 +783,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
+  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
 
   const dataForYoY = useMemo(() => {
     let filtered = rawData.filter(game => {
@@ -810,6 +816,10 @@ export default function App() {
       const dayOfWeekMap = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
       const dayStr = dayOfWeekMap[new Date(game.Date).getDay()];
       if (selectedDayOfWeek !== 'All' && dayStr !== selectedDayOfWeek) return false;
+
+      const gameDateForMonth = new Date(game.Date);
+      const matchMonth = selectedMonthFilter === 'All' || String(gameDateForMonth.getMonth() + 1).padStart(2, '0') === selectedMonthFilter;
+      if (!matchMonth) return false;
 
       const matchTheme = selectedThemeFilter === 'All' ? true :
                          selectedThemeFilter === 'ThemeOnly' ? !!game.Theme :
@@ -856,7 +866,7 @@ export default function App() {
     }
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
+  }, [rawData, viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
 
   const yearlyStats = useMemo(() => {
     if (dataForYoY.length === 0) return [];
@@ -1652,6 +1662,26 @@ export default function App() {
           )}
 
           <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">選擇月份</label>
+            <select
+              value={selectedMonthFilter}
+              onChange={(e) => setSelectedMonthFilter(e.target.value)}
+              className="w-full p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="All">全部月份</option>
+              <option value="03">3月</option>
+              <option value="04">4月</option>
+              <option value="05">5月</option>
+              <option value="06">6月</option>
+              <option value="07">7月</option>
+              <option value="08">8月</option>
+              <option value="09">9月</option>
+              <option value="10">10月</option>
+              <option value="11">11月</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">選擇星期</label>
             <select
               value={selectedDayOfWeek}
@@ -1868,7 +1898,8 @@ export default function App() {
                     {startYear === 'All' && endYear === 'All' ? '歷年' : `${startYear === 'All' ? '最早期' : startYear} ~ ${endYear === 'All' ? '最新' : endYear}`}
                   </span>
                   {selectedStadiumFilter !== 'All' && <span>📍 {selectedStadiumFilter}</span>}
-                  {selectedDayOfWeek !== 'All' && <span>📅 {selectedDayOfWeek}</span>}
+                  {selectedMonthFilter !== 'All' && <span>📅 {Number(selectedMonthFilter)}月</span>}
+                  {selectedDayOfWeek !== 'All' && <span>🗓️ {selectedDayOfWeek}</span>}
                   {selectedThemeFilter === 'ThemeOnly' && <span>⭐ 僅主題日</span>}
                   {selectedThemeFilter === 'NormalOnly' && <span>⚾ 僅無主題例行賽</span>}
                   {selectedGameType !== 'All' && <span>🏆 {selectedGameType === 'Playoff' ? '僅季後賽' : selectedGameType}</span>}
