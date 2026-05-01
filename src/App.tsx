@@ -577,7 +577,7 @@ export default function App() {
     const stadiums = new Set<string>();
     
     rawData.forEach(game => {
-      if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') && game.HomeTeam !== selectedOption && game.AwayTeam !== selectedOption) return;
+      if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') && selectedOption !== 'All' && game.HomeTeam !== selectedOption && game.AwayTeam !== selectedOption) return;
       if (!game.Date) return;
       
       const gameDate = new Date(game.Date);
@@ -1922,7 +1922,7 @@ export default function App() {
                 <div className="flex flex-col md:flex-row md:items-center gap-4">
                   <div className="flex items-center gap-3">
                     <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                       {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : viewMode === 'matchup' ? '對戰組合場均人數矩陣 (Heatmap)' : viewMode === 'teamWinRate' ? (selectedOption === 'All' ? `全聯盟戰績${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}勝率排行` : `${selectedOption} 對戰各隊${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}戰績勝率`) : viewMode === 'cheerleaderWinRate' ? `啦啦隊勝率排名` : `${selectedOption} - 人數趨勢`}
+                       {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : viewMode === 'matchup' ? '對戰組合場均人數矩陣 (Heatmap)' : viewMode === 'teamWinRate' ? (selectedOption === 'All' ? `全聯盟戰績${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}勝率排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}` : `${selectedOption} 對戰各隊${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}戰績勝率${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}`) : viewMode === 'cheerleaderWinRate' ? `啦啦隊勝率排名` : `${selectedOption} - 人數趨勢`}
                       {loading && <span className="text-sm font-normal text-gray-400 animate-pulse">載入中...</span>}
                     </h2>
                     {!showNextWeek && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && chartData.length > 0 && (
@@ -2137,7 +2137,7 @@ export default function App() {
           ) : viewMode === 'teamWinRate' ? (
             <div className="flex flex-col flex-1 w-full bg-white dark:bg-slate-800 p-2 md:p-6 mb-2">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 text-center">
-                {selectedOption === 'All' ? `全聯盟戰績${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}勝率排行` : `${selectedOption} 對戰各隊${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}戰績勝率`}
+                {selectedOption === 'All' ? `全聯盟戰績${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}勝率排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}` : `${selectedOption} 對戰各隊${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}戰績勝率${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}`}
               </h3>
               <div className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
                 計算方式為有效比賽之勝場數除以（勝場＋敗場），和局不計入勝率計算。
