@@ -26,7 +26,7 @@ ChartJS.register(
   Filler
 );
 
-type ViewMode = 'homeTeam' | 'stadium' | 'matchup' | 'cheerleaderWinRate' | 'teamWinRate';
+type ViewMode = 'homeTeam' | 'stadium' | 'matchup' | 'cheerleaderWinRate' | 'teamWinRate' | 'pitcherWinRate';
 type SortMode = 'date' | 'audienceDesc' | 'tempDesc' | 'rainAsc' | 'winRateDesc';
 
 export default function App() {
@@ -129,7 +129,7 @@ export default function App() {
         let activeGames: GameData[] = [];
         if (viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate') {
           activeGames = rawData.filter(d => d.HomeTeam === newValue);
-        } else if (viewMode === 'teamWinRate') {
+        } else if (viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') {
           activeGames = rawData.filter(d => d.HomeTeam === newValue || d.AwayTeam === newValue);
         }
         
@@ -201,7 +201,7 @@ export default function App() {
     setSelectedGameType('All');
     setSelectedGameLimit('');
     setSelectedOption(''); // Reset selected option to trigger auto-select
-    if (viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') {
+    if (viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') {
       setShowNextWeek(false);
     }
   }, [viewMode]);
@@ -517,7 +517,7 @@ export default function App() {
         if (game.HomeTeam) set.add(game.HomeTeam);
       } else if (viewMode === 'cheerleaderWinRate') {
         if (game.HomeTeam) set.add(game.HomeTeam);
-      } else if (viewMode === 'teamWinRate') {
+      } else if (viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') {
         if (game.HomeTeam) set.add(game.HomeTeam);
         if (game.AwayTeam) set.add(game.AwayTeam);
       } else if (viewMode === 'stadium' && game.Stadium) {
@@ -527,9 +527,9 @@ export default function App() {
     const sortedOptions = Array.from(set).sort();
     
     if (!sortedOptions.includes(selectedOption) && sortedOptions.length > 0) {
-      if (viewMode === 'teamWinRate' && selectedOption === 'All') {
+      if ((viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') && selectedOption === 'All') {
         // 'All' is a valid option for teamWinRate
-      } else if (viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') {
+      } else if (viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') {
         const activeTeams = ['台鋼雄鷹', '中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將'];
         const foundActive = activeTeams.find(t => sortedOptions.includes(t));
         setSelectedOption(foundActive || sortedOptions[0]);
@@ -549,7 +549,7 @@ export default function App() {
         if (game.HomeTeam) set.add(game.HomeTeam);
       } else if (viewMode === 'cheerleaderWinRate') {
         if (game.HomeTeam) set.add(game.HomeTeam);
-      } else if (viewMode === 'teamWinRate') {
+      } else if (viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') {
         if (game.HomeTeam) set.add(game.HomeTeam);
         if (game.AwayTeam) set.add(game.AwayTeam);
       } else if (viewMode === 'stadium' && game.Stadium) {
@@ -572,12 +572,12 @@ export default function App() {
   // Extract available stadiums for the selected team
   const availableStadiumsForTeam = useMemo(() => {
     if (viewMode === 'stadium') return ['All']; // If we are primarily selecting a stadium, the stadium combobox doesn't need to show everything twice
-    if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') && !selectedOption) return ['All'];
+    if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') && !selectedOption) return ['All'];
     
     const stadiums = new Set<string>();
     
     rawData.forEach(game => {
-      if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') && selectedOption !== 'All' && game.HomeTeam !== selectedOption && game.AwayTeam !== selectedOption) return;
+      if ((viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') && selectedOption !== 'All' && game.HomeTeam !== selectedOption && game.AwayTeam !== selectedOption) return;
       if (!game.Date) return;
       
       const gameDate = new Date(game.Date);
@@ -681,7 +681,7 @@ export default function App() {
           matchView = game.HomeTeam === selectedOption;
         } else if (viewMode === 'cheerleaderWinRate') {
           matchView = game.HomeTeam === selectedOption || selectedOption === 'All';
-        } else if (viewMode === 'teamWinRate') {
+        } else if (viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') {
           if (selectedOption === 'All') {
             matchView = true;
           } else {
@@ -693,7 +693,7 @@ export default function App() {
         if (!matchView) return false;
       }
 
-      const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
+      const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
       if (!matchStadium) return false;
 
       const dayOfWeekMap = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -800,7 +800,7 @@ export default function App() {
           matchView = game.HomeTeam === selectedOption;
         } else if (viewMode === 'cheerleaderWinRate') {
           matchView = game.HomeTeam === selectedOption || selectedOption === 'All';
-        } else if (viewMode === 'teamWinRate') {
+        } else if (viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') {
           if (selectedOption === 'All') {
             matchView = true;
           } else {
@@ -812,7 +812,7 @@ export default function App() {
         if (!matchView) return false;
       }
 
-      const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
+      const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
       if (!matchStadium) return false;
 
       const dayOfWeekMap = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -977,6 +977,57 @@ export default function App() {
         games: stat.games,
         effectiveGames: stat.wins + stat.losses, // ties don't count towards win rate calculation mathematically
         rate: (stat.wins + stat.losses) > 0 ? (stat.wins / (stat.wins + stat.losses)) : 0
+      }))
+      .sort((a, b) => b.rate === a.rate ? b.games - a.games : b.rate - a.rate);
+  }, [chartData, viewMode, winRateMode, selectedOption]);
+
+  const pitcherStats = useMemo(() => {
+    if (viewMode !== 'pitcherWinRate') return [];
+    const stats: Record<string, { wins: number, losses: number, ties: number, games: number, audienceSum: number, team: string }> = {};
+    chartData.forEach(game => {
+      if (!game.HomeResult || (game.HomeResult !== '勝' && game.HomeResult !== '敗' && game.HomeResult !== '和')) return;
+
+      const updateStats = (pitcher: string, team: string, isWin: boolean, isTie: boolean, audience: number) => {
+         if (!stats[pitcher]) stats[pitcher] = { wins: 0, losses: 0, ties: 0, games: 0, audienceSum: 0, team };
+         stats[pitcher].games++;
+         if (audience > 0) stats[pitcher].audienceSum += audience;
+         if (isTie) stats[pitcher].ties++;
+         else if (isWin) stats[pitcher].wins++;
+         else stats[pitcher].losses++;
+      };
+
+      const homeWin = game.HomeResult === '勝';
+      const homeTie = game.HomeResult === '和';
+      const homeLoss = game.HomeResult === '敗';
+
+      if (selectedOption === 'All') {
+        if (winRateMode === 'home' || winRateMode === 'all') {
+           if (game.HomeStarter && game.HomeTeam) updateStats(game.HomeStarter, game.HomeTeam, homeWin, homeTie, game.Audience || 0);
+        }
+        if (winRateMode === 'away' || winRateMode === 'all') {
+           if (game.AwayStarter && game.AwayTeam) updateStats(game.AwayStarter, game.AwayTeam, homeLoss, homeTie, game.Audience || 0);
+        }
+      } else {
+        if ((winRateMode === 'home' || winRateMode === 'all') && game.HomeTeam === selectedOption) {
+           if (game.HomeStarter) updateStats(game.HomeStarter, game.HomeTeam, homeWin, homeTie, game.Audience || 0);
+        }
+        if ((winRateMode === 'away' || winRateMode === 'all') && game.AwayTeam === selectedOption) {
+           if (game.AwayStarter) updateStats(game.AwayStarter, game.AwayTeam, homeLoss, homeTie, game.Audience || 0);
+        }
+      }
+    });
+
+    return Object.entries(stats)
+      .map(([pitcher, stat]) => ({
+        pitcher,
+        team: stat.team,
+        wins: stat.wins,
+        losses: stat.losses,
+        ties: stat.ties,
+        games: stat.games,
+        effectiveGames: stat.wins + stat.losses,
+        rate: (stat.wins + stat.losses) > 0 ? (stat.wins / (stat.wins + stat.losses)) : 0,
+        avgAudience: stat.games > 0 ? Math.round(stat.audienceSum / stat.games) : 0
       }))
       .sort((a, b) => b.rate === a.rate ? b.games - a.games : b.rate - a.rate);
   }, [chartData, viewMode, winRateMode, selectedOption]);
@@ -1665,6 +1716,7 @@ export default function App() {
             >
               <option value="homeTeam">各隊主場人數</option>
               <option value="stadium">各球場人數</option>
+              <option value="pitcherWinRate">先發投手分析</option>
               <option value="teamWinRate">對戰各隊戰績勝率</option>
               <option value="cheerleaderWinRate">各隊啦啦隊勝率排行</option>
               <option value="matchup">對戰組合交叉分析</option>
@@ -1674,14 +1726,14 @@ export default function App() {
           {viewMode !== 'matchup' && (
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {(viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') ? '選擇球隊' : '選擇球場'}
+                {(viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') ? '選擇球隊' : '選擇球場'}
               </label>
               <select
                 value={selectedOption}
                 onChange={(e) => handleOptionChange(e.target.value)}
                 className="w-full p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                {viewMode === 'teamWinRate' && (
+                {(viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') && (
                   <option value="All">全部球隊</option>
                 )}
                 {options.map(opt => (
@@ -1720,7 +1772,7 @@ export default function App() {
             </div>
           </div>
 
-          {(viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate') && (
+          {(viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') && (
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">選擇球場</label>
               <select
@@ -1835,7 +1887,7 @@ export default function App() {
 
         {/* Sorting */}
         <div className="flex flex-wrap gap-2 items-center">
-          {viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && (
+          {viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && viewMode !== 'pitcherWinRate' && (
             <>
               <button
                 onClick={() => {
@@ -1922,10 +1974,10 @@ export default function App() {
                 <div className="flex flex-col md:flex-row md:items-center gap-4">
                   <div className="flex items-center gap-3">
                     <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                       {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : viewMode === 'matchup' ? '對戰組合場均人數矩陣 (Heatmap)' : viewMode === 'teamWinRate' ? (selectedOption === 'All' ? `全聯盟戰績${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}勝率排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}` : `${selectedOption} 對戰各隊${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}戰績勝率${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}`) : viewMode === 'cheerleaderWinRate' ? `啦啦隊勝率排名` : `${selectedOption} - 人數趨勢`}
+                       {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : viewMode === 'matchup' ? '對戰組合場均人數矩陣 (Heatmap)' : viewMode === 'teamWinRate' ? (selectedOption === 'All' ? `全聯盟戰績${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}勝率排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}` : `${selectedOption} 對戰各隊${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}戰績勝率${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}`) : viewMode === 'pitcherWinRate' ? (selectedOption === 'All' ? `全聯盟先發投手勝率與票房排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}` : `${selectedOption} 先發投手勝率與票房排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}`) : viewMode === 'cheerleaderWinRate' ? `啦啦隊勝率排名` : `${selectedOption} - 人數趨勢`}
                       {loading && <span className="text-sm font-normal text-gray-400 animate-pulse">載入中...</span>}
                     </h2>
-                    {!showNextWeek && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && chartData.length > 0 && (
+                    {!showNextWeek && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && viewMode !== 'pitcherWinRate' && chartData.length > 0 && (
                       <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <button
                           onClick={() => setChartType('trend')}
@@ -1942,22 +1994,24 @@ export default function App() {
                       </div>
                     )}
                     
-                    {!showNextWeek && viewMode === 'teamWinRate' && (
+                    {!showNextWeek && (viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') && (
                       <div className="flex flex-col sm:flex-row gap-2">
-                        <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
-                          <button
-                            onClick={() => setTeamWinRateChartType('table')}
-                            className={`whitespace-nowrap px-3 py-1 rounded-md text-sm font-medium transition-colors ${teamWinRateChartType === 'table' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                          >
-                            對戰總結
-                          </button>
-                          <button
-                            onClick={() => setTeamWinRateChartType('monthlyLine')}
-                            className={`whitespace-nowrap px-3 py-1 rounded-md text-sm font-medium transition-colors ${teamWinRateChartType === 'monthlyLine' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                          >
-                            單月勝率
-                          </button>
-                        </div>
+                        {viewMode === 'teamWinRate' && (
+                          <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
+                            <button
+                              onClick={() => setTeamWinRateChartType('table')}
+                              className={`whitespace-nowrap px-3 py-1 rounded-md text-sm font-medium transition-colors ${teamWinRateChartType === 'table' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                            >
+                              對戰總結
+                            </button>
+                            <button
+                              onClick={() => setTeamWinRateChartType('monthlyLine')}
+                              className={`whitespace-nowrap px-3 py-1 rounded-md text-sm font-medium transition-colors ${teamWinRateChartType === 'monthlyLine' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                            >
+                              單月勝率
+                            </button>
+                          </div>
+                        )}
                         <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
                           <button
                             onClick={() => setWinRateMode('home')}
@@ -2301,6 +2355,50 @@ export default function App() {
                 )
               )}
             </div>
+          ) : viewMode === 'pitcherWinRate' ? (
+            <div className="flex flex-col flex-1 w-full bg-white dark:bg-slate-800 p-2 md:p-6 mb-2">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 text-center">
+                {selectedOption === 'All' ? `全聯盟先發投手勝率與票房排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}` : `${selectedOption} 先發投手勝率與票房排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}`}
+              </h3>
+              <div className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
+                計算方式為當天先發場次，最後球隊贏球之勝場數除以（勝敗和），和局不計入勝率計算。並顯示先發場次的場均人數。
+              </div>
+
+              {pitcherStats.length === 0 ? (
+                <div className="text-center text-gray-400 py-10">目前沒有符合條件的投手資料。</div>
+              ) : (
+                <div className="w-full sm:w-fit max-w-full overflow-x-auto custom-scrollbar rounded-xl border border-gray-200 dark:border-slate-700 mx-auto shadow-sm">
+                  <table className="w-full sm:w-auto text-center text-sm table-auto min-w-[500px]">
+                    <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
+                      <tr>
+                        <th className="py-3 px-2 font-bold border-b border-gray-200 dark:border-slate-700 w-16 whitespace-nowrap">排名</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 text-left sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 whitespace-nowrap shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">投手</th>
+                        {selectedOption === 'All' && <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 whitespace-nowrap">球隊</th>}
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">出賽</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">勝-敗-和</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">勝率</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">場均人數</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 bg-white dark:bg-slate-800">
+                      {pitcherStats.map((stat, idx) => (
+                        <tr key={idx} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                          <td className="py-3 px-2 font-bold text-gray-400 dark:text-gray-500 whitespace-nowrap">#{idx + 1}</td>
+                          <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 text-left sticky left-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-blue-50/50 dark:group-hover:bg-slate-700/30 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)] whitespace-nowrap">{stat.pitcher}</td>
+                          {selectedOption === 'All' && <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.team}</td>}
+                          <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.games}</td>
+                          <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.wins}-{stat.losses}-{stat.ties}</td>
+                          <td className="py-3 px-4 text-rose-500 dark:text-rose-400 font-bold text-lg whitespace-nowrap">
+                            {stat.effectiveGames > 0 ? (stat.rate === 1 ? '1.000' : stat.rate.toFixed(3).replace(/^0+/, '')) : '.000'}
+                          </td>
+                          <td className="py-3 px-4 text-slate-800 dark:text-slate-200 font-semibold whitespace-nowrap">{stat.avgAudience.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           ) : viewMode === 'cheerleaderWinRate' ? (
             <div className="flex flex-col flex-1 w-full bg-white dark:bg-slate-800 p-2 md:p-6 mb-2">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 text-center">
@@ -2567,7 +2665,7 @@ export default function App() {
           )}
 
           {/* Data Grid Area inside exportable chart area */}
-          {!loading && chartData.length > 0 && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && chartType === 'trend' && (!isExporting || exportIncludeTable) && (
+          {!loading && chartData.length > 0 && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && viewMode !== 'pitcherWinRate' && chartType === 'trend' && (!isExporting || exportIncludeTable) && (
             <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col mt-4 ${isExporting ? '' : 'max-h-[400px]'}`}>
               <div className="p-4 border-b border-gray-100 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center">
                 <h2 className="text-sm font-bold text-gray-700 dark:text-gray-300">詳細數據清單 {visibleDataIndices ? `(目前顯示 ${visibleDataIndices[1] - visibleDataIndices[0] + 1} 筆)` : ''}</h2>
