@@ -42,6 +42,9 @@ export default function App() {
   const [selectedOption, setSelectedOption] = useState<string>(searchParams.get('team') || '');
   const [startYear, setStartYear] = useState<string>(searchParams.get('sy') || 'All');
   const [endYear, setEndYear] = useState<string>(searchParams.get('ey') || 'All');
+  const [compareMode, setCompareMode] = useState<boolean>(searchParams.get('comp') === 'true');
+  const [compareStartYear, setCompareStartYear] = useState<string>(searchParams.get('csy') || 'All');
+  const [compareEndYear, setCompareEndYear] = useState<string>(searchParams.get('cey') || 'All');
   const [selectedStadiumFilter, setSelectedStadiumFilter] = useState<string>(searchParams.get('stad') || 'All');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<string>(searchParams.get('day') || 'All');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>(searchParams.get('month') || 'All');
@@ -170,10 +173,13 @@ export default function App() {
     if (showNextWeek) params.set('nw', 'true');
     if (sortMode !== 'date') params.set('sort', sortMode);
     if (teamWinRateChartType !== 'table') params.set('twrct', teamWinRateChartType);
+    if (compareMode) params.set('comp', 'true');
+    if (compareStartYear !== 'All') params.set('csy', compareStartYear);
+    if (compareEndYear !== 'All') params.set('cey', compareEndYear);
     
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
-  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType]);
+  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType, compareMode, compareStartYear, compareEndYear]);
 
   // Default to system preference if we don't have a saved one
   useEffect(() => {
@@ -527,8 +533,8 @@ export default function App() {
     const sortedOptions = Array.from(set).sort();
     
     if (!sortedOptions.includes(selectedOption) && sortedOptions.length > 0) {
-      if ((viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate' || viewMode === 'stadium') && selectedOption === 'All') {
-        // 'All' is a valid option for teamWinRate, pitcherWinRate, and stadium
+      if ((viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate' || viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All') {
+        // 'All' is a valid option for teamWinRate, pitcherWinRate, stadium, and homeTeam
       } else if (viewMode === 'homeTeam' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') {
         const activeTeams = ['台鋼雄鷹', '中信兄弟', '味全龍', '統一7-ELEVEn獅', '樂天桃猿', '富邦悍將'];
         const foundActive = activeTeams.find(t => sortedOptions.includes(t));
@@ -678,7 +684,7 @@ export default function App() {
         if (viewMode === 'stadium') {
           matchView = selectedOption === 'All' ? true : game.Stadium === selectedOption;
         } else if (viewMode === 'homeTeam') {
-          matchView = game.HomeTeam === selectedOption;
+          matchView = selectedOption === 'All' ? true : game.HomeTeam === selectedOption;
         } else if (viewMode === 'cheerleaderWinRate') {
           matchView = game.HomeTeam === selectedOption || selectedOption === 'All';
         } else if (viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') {
@@ -797,7 +803,7 @@ export default function App() {
         if (viewMode === 'stadium') {
           matchView = selectedOption === 'All' ? true : game.Stadium === selectedOption;
         } else if (viewMode === 'homeTeam') {
-          matchView = game.HomeTeam === selectedOption;
+          matchView = selectedOption === 'All' ? true : game.HomeTeam === selectedOption;
         } else if (viewMode === 'cheerleaderWinRate') {
           matchView = game.HomeTeam === selectedOption || selectedOption === 'All';
         } else if (viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') {
@@ -981,26 +987,77 @@ export default function App() {
       .sort((a, b) => b.rate === a.rate ? b.games - a.games : b.rate - a.rate);
   }, [chartData, viewMode, winRateMode, selectedOption]);
 
-  const stadiumRankingStats = useMemo(() => {
-    if (viewMode !== 'stadium' || selectedOption !== 'All') return [];
-    const stats: Record<string, { games: number, audienceSum: number }> = {};
-    chartData.forEach(game => {
-      const stadium = game.Stadium;
-      if (!stadium) return;
-      if (!stats[stadium]) stats[stadium] = { games: 0, audienceSum: 0 };
-      stats[stadium].games++;
-      stats[stadium].audienceSum += (game.Audience || 0);
-    });
+  const categoryRankingStats = useMemo(() => {
+    if (!((viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All')) return { base: [], comparison: [] };
     
-    return Object.entries(stats)
-      .map(([stadium, stat]) => ({
-        stadium,
-        games: stat.games,
-        totalAudience: stat.audienceSum,
-        avgAudience: stat.games > 0 ? Math.round(stat.audienceSum / stat.games) : 0
-      }))
-      .sort((a, b) => b.avgAudience - a.avgAudience);
-  }, [chartData, viewMode, selectedOption]);
+    // Helper to calc stats for a given dataset
+    const calcStats = (data: GameData[]) => {
+      const stats: Record<string, { games: number, audienceSum: number }> = {};
+      const groupingKey = viewMode === 'stadium' ? 'Stadium' : 'HomeTeam';
+      data.forEach(game => {
+        const itemKey = game[groupingKey as keyof GameData] as string;
+        if (!itemKey) return;
+        if (!stats[itemKey]) stats[itemKey] = { games: 0, audienceSum: 0 };
+        stats[itemKey].games++;
+        stats[itemKey].audienceSum += (game.Audience || 0);
+      });
+      return stats;
+    };
+
+    if (!compareMode) {
+      const stats = calcStats(chartData);
+      const base = Object.entries(stats)
+        .map(([category, stat]) => ({
+          category,
+          games: stat.games,
+          totalAudience: stat.audienceSum,
+          avgAudience: stat.games > 0 ? Math.round(stat.audienceSum / stat.games) : 0
+        }))
+        .sort((a, b) => b.avgAudience - a.avgAudience);
+      return { base, comparison: [] };
+    } else {
+      // Filter dataForYoY for period 1
+      const p1Data = dataForYoY.filter(game => {
+        if (!game.Date) return false;
+        const match = String(game.Date).match(/^(\d{4})/);
+        const y = match ? match[1] : '';
+        if (startYear !== 'All' && y < startYear) return false;
+        if (endYear !== 'All' && y > endYear) return false;
+        return true;
+      });
+      
+      const p2Data = dataForYoY.filter(game => {
+        if (!game.Date) return false;
+        const match = String(game.Date).match(/^(\d{4})/);
+        const y = match ? match[1] : '';
+        if (compareStartYear !== 'All' && y < compareStartYear) return false;
+        if (compareEndYear !== 'All' && y > compareEndYear) return false;
+        return true;
+      });
+
+      const p1Stats = calcStats(p1Data);
+      const p2Stats = calcStats(p2Data);
+
+      const allCategories = new Set([...Object.keys(p1Stats), ...Object.keys(p2Stats)]);
+      const comparison = Array.from(allCategories).map(category => {
+        const s1 = p1Stats[category] || { games: 0, audienceSum: 0 };
+        const s2 = p2Stats[category] || { games: 0, audienceSum: 0 };
+        const avg1 = s1.games > 0 ? Math.round(s1.audienceSum / s1.games) : 0;
+        const avg2 = s2.games > 0 ? Math.round(s2.audienceSum / s2.games) : 0;
+        const growth = avg1 > 0 ? ((avg2 - avg1) / avg1 * 100) : null;
+        return {
+          category,
+          p1Games: s1.games,
+          p1Avg: avg1,
+          p2Games: s2.games,
+          p2Avg: avg2,
+          growth
+        };
+      }).sort((a, b) => b.p2Avg - a.p2Avg);
+
+      return { base: [], comparison };
+    }
+  }, [chartData, dataForYoY, viewMode, selectedOption, compareMode, startYear, endYear, compareStartYear, compareEndYear]);
 
   const pitcherStats = useMemo(() => {
     if (viewMode !== 'pitcherWinRate') return [];
@@ -1760,6 +1817,9 @@ export default function App() {
                 {viewMode === 'stadium' && (
                   <option value="All">全部球場比較</option>
                 )}
+                {viewMode === 'homeTeam' && (
+                  <option value="All">全聯盟主場人數</option>
+                )}
                 {options.map(opt => (
                   <option key={opt} value={opt}>{opt}</option>
                 ))}
@@ -1768,7 +1828,7 @@ export default function App() {
           )}
 
           <div className={`space-y-1 ${viewMode === 'matchup' ? 'col-span-2 md:col-span-1' : 'md:col-span-2 lg:col-span-1'}`}>
-            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">選擇年份範圍</label>
+            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{(compareMode && (viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All') ? '基準區間' : '選擇年份範圍'}</label>
             <div className="flex items-center gap-2">
               <select
                 value={showNextWeek ? 'All' : startYear}
@@ -1794,6 +1854,45 @@ export default function App() {
                 ))}
               </select>
             </div>
+            {(viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All' && (
+              <label className="mt-2 flex flex-row items-center gap-2 cursor-pointer text-sm text-gray-600 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={compareMode}
+                  onChange={(e) => setCompareMode(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-500 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                />
+                啟用區間差異比較
+              </label>
+            )}
+            {compareMode && (viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All' && (
+              <div className="mt-2">
+                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1">比較區間</label>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={compareStartYear}
+                    onChange={(e) => setCompareStartYear(e.target.value)}
+                    className="flex-1 min-w-0 p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none truncate"
+                  >
+                    <option value="All">最早</option>
+                    {availableYears.filter(y => y !== 'All').sort().map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                  <span className="text-gray-400 font-medium shrink-0">~</span>
+                  <select
+                    value={compareEndYear}
+                    onChange={(e) => setCompareEndYear(e.target.value)}
+                    className="flex-1 min-w-0 p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none truncate"
+                  >
+                    <option value="All">最新</option>
+                    {availableYears.filter(y => y !== 'All').sort((a, b) => b.localeCompare(a)).map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
           {(viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') && (
@@ -1998,10 +2097,10 @@ export default function App() {
                 <div className="flex flex-col md:flex-row md:items-center gap-4">
                   <div className="flex items-center gap-3">
                     <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                       {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : viewMode === 'matchup' ? '對戰組合場均人數矩陣 (Heatmap)' : viewMode === 'teamWinRate' ? (selectedOption === 'All' ? `全聯盟戰績${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}勝率排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}` : `${selectedOption} 對戰各隊${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}戰績勝率${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}`) : viewMode === 'pitcherWinRate' ? (selectedOption === 'All' ? `全聯盟先發投手勝率與票房排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}` : `${selectedOption} 先發投手勝率與票房排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}`) : viewMode === 'cheerleaderWinRate' ? `啦啦隊勝率排名` : (viewMode === 'stadium' && selectedOption === 'All') ? `全部球場人數排行` : `${selectedOption} - 人數趨勢`}
+                       {showNextWeek ? `${selectedOption} - 未來一週賽程預覽` : viewMode === 'matchup' ? '對戰組合場均人數矩陣 (Heatmap)' : viewMode === 'teamWinRate' ? (selectedOption === 'All' ? `全聯盟戰績${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}勝率排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}` : `${selectedOption} 對戰各隊${winRateMode === 'home' ? '主場' : winRateMode === 'away' ? '客場' : '總'}戰績勝率${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}`) : viewMode === 'pitcherWinRate' ? (selectedOption === 'All' ? `全聯盟先發投手勝率與票房排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}` : `${selectedOption} 先發投手勝率與票房排行${selectedStadiumFilter !== 'All' ? ` - ${selectedStadiumFilter}` : ''}`) : viewMode === 'cheerleaderWinRate' ? `啦啦隊勝率排名` : ((viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All') ? (viewMode === 'stadium' ? `全部球場人數排行` : `全聯盟主場人數排行`) : `${selectedOption} - 人數趨勢`}
                       {loading && <span className="text-sm font-normal text-gray-400 animate-pulse">載入中...</span>}
                     </h2>
-                    {!showNextWeek && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && viewMode !== 'pitcherWinRate' && !(viewMode === 'stadium' && selectedOption === 'All') && chartData.length > 0 && (
+                    {!showNextWeek && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && viewMode !== 'pitcherWinRate' && !((viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All') && chartData.length > 0 && (
                       <div className="flex bg-gray-100 dark:bg-slate-700/80 p-0.5 rounded-lg border border-gray-200 dark:border-slate-600">
                         <button
                           onClick={() => setChartType('trend')}
@@ -2077,7 +2176,7 @@ export default function App() {
                 </div>
               </div>
               
-              {!loading && chartData.length > 0 && !showNextWeek && chartType === 'trend' && viewMode !== 'cheerleaderWinRate' && !(viewMode === 'stadium' && selectedOption === 'All') && (
+              {!loading && chartData.length > 0 && !showNextWeek && chartType === 'trend' && viewMode !== 'cheerleaderWinRate' && !((viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All') && (
                 <div className="flex flex-wrap lg:flex-nowrap gap-3 items-stretch w-full xl:w-auto mt-2 xl:mt-0 justify-start xl:justify-end">
                   {/* 總場次 */}
                   <div className="bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-2 flex flex-col items-start shadow-sm transition-transform hover:-translate-y-0.5">
@@ -2379,39 +2478,80 @@ export default function App() {
                 )
               )}
             </div>
-          ) : viewMode === 'stadium' && selectedOption === 'All' ? (
+          ) : ((viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All') ? (
             <div className="flex flex-col flex-1 w-full bg-white dark:bg-slate-800 p-2 md:p-6 mb-2">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2 text-center">
-                全部球場人數排行
+                {viewMode === 'stadium' ? '全部球場人數排行' : '全聯盟主場人數排行'}
               </h3>
               <div className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
-                計算方式為指定年份區間內各球場的總人數及場均人數。
+                {"計算方式為指定年份區間內各" + (viewMode === 'stadium' ? '球場' : '主隊') + "的總人數及場均人數。"}
               </div>
 
-              {stadiumRankingStats.length === 0 ? (
-                <div className="text-center text-gray-400 py-10">目前沒有符合條件的球場資料。</div>
+              {categoryRankingStats.base.length === 0 && categoryRankingStats.comparison.length === 0 ? (
+                <div className="text-center text-gray-400 py-10">目前沒有符合條件的資料。</div>
               ) : (
                 <div className="w-full sm:w-fit max-w-full overflow-x-auto custom-scrollbar rounded-xl border border-gray-200 dark:border-slate-700 mx-auto shadow-sm">
                   <table className="w-full sm:w-auto text-center text-sm table-auto min-w-[500px]">
                     <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">
                       <tr>
                         <th className="py-3 px-2 font-bold border-b border-gray-200 dark:border-slate-700 w-16 whitespace-nowrap">排名</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 text-left sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 whitespace-nowrap shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">球場</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">比賽場次</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">總人數</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">場均人數</th>
+                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 text-left sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 whitespace-nowrap shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">{viewMode === 'stadium' ? '球場' : '球隊'}</th>
+                        {!compareMode ? (
+                          <>
+                            <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">比賽場次</th>
+                            <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">總人數</th>
+                            <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">場均人數</th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">基準場均</th>
+                            <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">比較場均</th>
+                            <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">成長率</th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 bg-white dark:bg-slate-800">
-                      {stadiumRankingStats.map((stat, idx) => (
-                        <tr key={stat.stadium} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/30 transition-colors">
-                          <td className="py-3 px-2 font-bold text-gray-400 dark:text-gray-500 whitespace-nowrap">#{idx + 1}</td>
-                          <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 text-left sticky left-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-blue-50/50 dark:group-hover:bg-slate-700/30 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)] whitespace-nowrap">{stat.stadium}</td>
-                          <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.games}</td>
-                          <td className="py-3 px-4 text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">{stat.totalAudience.toLocaleString()}</td>
-                          <td className="py-3 px-4 text-slate-800 dark:text-slate-200 font-semibold whitespace-nowrap">{stat.avgAudience.toLocaleString()}</td>
-                        </tr>
-                      ))}
+                      {!compareMode ? (
+                        categoryRankingStats.base.map((stat: any, idx: number) => (
+                          <tr key={stat.category} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                            <td className="py-3 px-2 font-bold text-gray-400 dark:text-gray-500 whitespace-nowrap">#{idx + 1}</td>
+                            <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 text-left sticky left-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-blue-50/50 dark:group-hover:bg-slate-700/30 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)] whitespace-nowrap">{stat.category}</td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.games}</td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">{stat.totalAudience.toLocaleString()}</td>
+                            <td className="py-3 px-4 text-slate-800 dark:text-slate-200 font-semibold whitespace-nowrap">{stat.avgAudience.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        categoryRankingStats.comparison.map((stat: any, idx: number) => (
+                          <tr key={stat.category} className={`hover:bg-blue-50/50 dark:hover:bg-slate-700/30 transition-colors ${stat.p1Games === 0 || stat.p2Games === 0 ? 'opacity-60' : ''}`}>
+                            <td className="py-3 px-2 font-bold text-gray-400 dark:text-gray-500 whitespace-nowrap">#{idx + 1}</td>
+                            <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 text-left sticky left-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-blue-50/50 dark:group-hover:bg-slate-700/30 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)] whitespace-nowrap">
+                              {stat.category}
+                              <div className="text-[10px] font-normal text-gray-400 mt-0.5">({stat.p1Games}場 vs {stat.p2Games}場)</div>
+                            </td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.p1Avg > 0 ? stat.p1Avg.toLocaleString() : '-'}</td>
+                            <td className="py-3 px-4 text-slate-800 dark:text-slate-200 font-semibold whitespace-nowrap">{stat.p2Avg > 0 ? stat.p2Avg.toLocaleString() : '-'}</td>
+                            <td className="py-3 px-4 font-medium whitespace-nowrap">
+                              {stat.growth !== null ? (
+                                 stat.growth > 0 ? (
+                                    <span className="text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
+                                      <TrendingUp className="w-3.5 h-3.5" /> +{stat.growth.toFixed(1)}%
+                                    </span>
+                                 ) : stat.growth < 0 ? (
+                                    <span className="text-red-500 dark:text-red-400 flex items-center justify-center gap-1">
+                                      <TrendingDown className="w-3.5 h-3.5" /> {stat.growth.toFixed(1)}%
+                                    </span>
+                                 ) : (
+                                    <span className="text-slate-500 dark:text-slate-400">-</span>
+                                 )
+                              ) : (
+                                <span className="text-slate-400 text-xs text-center border-b border-dotted border-slate-300 pb-0.5 cursor-help" title="無法計算（可能有區間未比賽）">N/A</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2727,7 +2867,7 @@ export default function App() {
           )}
 
           {/* Data Grid Area inside exportable chart area */}
-          {!loading && chartData.length > 0 && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && viewMode !== 'pitcherWinRate' && !(viewMode === 'stadium' && selectedOption === 'All') && chartType === 'trend' && (!isExporting || exportIncludeTable) && (
+          {!loading && chartData.length > 0 && viewMode !== 'matchup' && viewMode !== 'cheerleaderWinRate' && viewMode !== 'teamWinRate' && viewMode !== 'pitcherWinRate' && !((viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All') && chartType === 'trend' && (!isExporting || exportIncludeTable) && (
             <div className={`bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col mt-4 ${isExporting ? '' : 'max-h-[400px]'}`}>
               <div className="p-4 border-b border-gray-100 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center">
                 <h2 className="text-sm font-bold text-gray-700 dark:text-gray-300">詳細數據清單 {visibleDataIndices ? `(目前顯示 ${visibleDataIndices[1] - visibleDataIndices[0] + 1} 筆)` : ''}</h2>
