@@ -45,6 +45,7 @@ export default function App() {
   const [compareMode, setCompareMode] = useState<boolean>(searchParams.get('comp') === 'true');
   const [compareStartYear, setCompareStartYear] = useState<string>(searchParams.get('csy') || 'All');
   const [compareEndYear, setCompareEndYear] = useState<string>(searchParams.get('cey') || 'All');
+  const [compareSortMode, setCompareSortMode] = useState<'p2Avg' | 'growth'>((searchParams.get('csm') as 'p2Avg' | 'growth') || 'p2Avg');
   const [selectedStadiumFilter, setSelectedStadiumFilter] = useState<string>(searchParams.get('stad') || 'All');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<string>(searchParams.get('day') || 'All');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>(searchParams.get('month') || 'All');
@@ -173,13 +174,16 @@ export default function App() {
     if (showNextWeek) params.set('nw', 'true');
     if (sortMode !== 'date') params.set('sort', sortMode);
     if (teamWinRateChartType !== 'table') params.set('twrct', teamWinRateChartType);
-    if (compareMode) params.set('comp', 'true');
+    if (compareMode) {
+      params.set('comp', 'true');
+      if (compareSortMode !== 'p2Avg') params.set('csm', compareSortMode);
+    }
     if (compareStartYear !== 'All') params.set('csy', compareStartYear);
     if (compareEndYear !== 'All') params.set('cey', compareEndYear);
     
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
-  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType, compareMode, compareStartYear, compareEndYear]);
+  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType, compareMode, compareStartYear, compareEndYear, compareSortMode]);
 
   // Default to system preference if we don't have a saved one
   useEffect(() => {
@@ -324,6 +328,7 @@ export default function App() {
       if (awayTeam === '統一狮') awayTeam = '統一7-ELEVEn獅';
       
       let stadium = (item.Stadium || '').trim();
+      if (stadium.includes('桃園')) stadium = '桃園'; // Merge '樂天桃園', '桃園國際棒球場', etc.
       
       // Parse scores and result
       let awayScore = (item as any).AwayScore !== undefined && (item as any).AwayScore !== '' ? Number((item as any).AwayScore) : undefined;
@@ -1053,11 +1058,20 @@ export default function App() {
           p2Avg: avg2,
           growth
         };
-      }).sort((a, b) => b.p2Avg - a.p2Avg);
+      }).sort((a, b) => {
+        if (compareSortMode === 'growth') {
+          // If growth is null, sort it to bottom
+          if (a.growth === null && b.growth === null) return b.p2Avg - a.p2Avg;
+          if (a.growth === null) return 1;
+          if (b.growth === null) return -1;
+          return b.growth - a.growth;
+        }
+        return b.p2Avg - a.p2Avg;
+      });
 
       return { base: [], comparison };
     }
-  }, [chartData, dataForYoY, viewMode, selectedOption, compareMode, startYear, endYear, compareStartYear, compareEndYear]);
+  }, [chartData, dataForYoY, viewMode, selectedOption, compareMode, startYear, endYear, compareStartYear, compareEndYear, compareSortMode]);
 
   const pitcherStats = useMemo(() => {
     if (viewMode !== 'pitcherWinRate') return [];
@@ -2162,9 +2176,21 @@ export default function App() {
                 
                 {/* 篩選條件標示 (讓截圖可以看到) */}
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                  <span className="font-medium bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded text-gray-600 dark:text-gray-300">
-                    {startYear === 'All' && endYear === 'All' ? '歷年' : `${startYear === 'All' ? '最早期' : startYear} ~ ${endYear === 'All' ? '最新' : endYear}`}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-medium bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-800">
+                      {(compareMode && (viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All') && <span className="text-[10px] mr-1 opacity-80 uppercase tracking-widest hidden sm:inline-block">基準</span>}
+                      {startYear === 'All' && endYear === 'All' ? '歷年' : `${startYear === 'All' ? '最早期' : startYear} ~ ${endYear === 'All' ? '最新' : endYear}`}
+                    </span>
+                    {(compareMode && (viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All') && (
+                      <>
+                        <span className="text-gray-300 dark:text-gray-600 font-bold hidden sm:inline-block">vs</span>
+                        <span className="font-medium bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded border border-emerald-100 dark:border-emerald-800">
+                          <span className="text-[10px] mr-1 opacity-80 uppercase tracking-widest hidden sm:inline-block">比較</span>
+                          {compareStartYear === 'All' && compareEndYear === 'All' ? '歷年' : `${compareStartYear === 'All' ? '最早期' : compareStartYear} ~ ${compareEndYear === 'All' ? '最新' : compareEndYear}`}
+                        </span>
+                      </>
+                    )}
+                  </div>
                   {selectedStadiumFilter !== 'All' && <span>📍 {selectedStadiumFilter}</span>}
                   {selectedMonthFilter !== 'All' && <span>📅 {Number(selectedMonthFilter)}月</span>}
                   {selectedDayOfWeek !== 'All' && <span>🗓️ {selectedDayOfWeek}</span>}
@@ -2504,9 +2530,21 @@ export default function App() {
                           </>
                         ) : (
                           <>
-                            <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">基準場均</th>
-                            <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">比較場均</th>
-                            <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">成長率</th>
+                            <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap text-gray-500">基準場均</th>
+                            <th 
+                              className={`py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors ${compareSortMode === 'p2Avg' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
+                              onClick={() => setCompareSortMode('p2Avg')}
+                              title="按比較場均排序"
+                            >
+                               比較場均 {compareSortMode === 'p2Avg' && '↓'}
+                            </th>
+                            <th 
+                              className={`py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors ${compareSortMode === 'growth' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
+                              onClick={() => setCompareSortMode('growth')}
+                              title="按成長率排序"
+                            >
+                               成長率 {compareSortMode === 'growth' && '↓'}
+                            </th>
                           </>
                         )}
                       </tr>
