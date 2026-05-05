@@ -48,7 +48,8 @@ export default function App() {
   const [compareSortMode, setCompareSortMode] = useState<'p2Avg' | 'growth' | 'totalGrowth'>((searchParams.get('csm') as 'p2Avg' | 'growth' | 'totalGrowth') || 'p2Avg');
   const [showTotalStats, setShowTotalStats] = useState<boolean>(searchParams.get('sts') === 'true');
   const [selectedStadiumFilter, setSelectedStadiumFilter] = useState<string>(searchParams.get('stad') || 'All');
-  const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<string>(searchParams.get('day') || 'All');
+  const [startDayOfWeek, setStartDayOfWeek] = useState<string>(searchParams.get('sdw') || 'All');
+  const [endDayOfWeek, setEndDayOfWeek] = useState<string>(searchParams.get('edw') || 'All');
   const [startMonth, setStartMonth] = useState<string>(searchParams.get('sm') || 'All');
   const [endMonth, setEndMonth] = useState<string>(searchParams.get('em') || 'All');
   const [selectedThemeFilter, setSelectedThemeFilter] = useState<string>(searchParams.get('theme') || 'All');
@@ -167,7 +168,8 @@ export default function App() {
     if (startYear !== 'All') params.set('sy', startYear);
     if (endYear !== 'All') params.set('ey', endYear);
     if (selectedStadiumFilter !== 'All') params.set('stad', selectedStadiumFilter);
-    if (selectedDayOfWeek !== 'All') params.set('day', selectedDayOfWeek);
+    if (startDayOfWeek !== 'All') params.set('sdw', startDayOfWeek);
+    if (endDayOfWeek !== 'All') params.set('edw', endDayOfWeek);
     if (startMonth !== 'All') params.set('sm', startMonth);
     if (endMonth !== 'All') params.set('em', endMonth);
     if (selectedThemeFilter !== 'All') params.set('theme', selectedThemeFilter);
@@ -187,7 +189,7 @@ export default function App() {
     
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
-  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType, compareMode, compareStartYear, compareEndYear, compareSortMode, showTotalStats]);
+  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, startDayOfWeek, endDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType, compareMode, compareStartYear, compareEndYear, compareSortMode, showTotalStats]);
 
   // Default to system preference if we don't have a saved one
   useEffect(() => {
@@ -208,7 +210,8 @@ export default function App() {
   useEffect(() => {
     // Preserve year bounds to avoid sudden resets when flipping viewMode
     setSelectedStadiumFilter('All');
-    setSelectedDayOfWeek('All');
+    setStartDayOfWeek('All');
+    setEndDayOfWeek('All');
     setStartMonth('All');
     setEndMonth('All');
     setSelectedThemeFilter('All');
@@ -712,9 +715,17 @@ export default function App() {
       const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
       if (!matchStadium) return false;
 
-      const dayOfWeekMap = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-      const dayStr = dayOfWeekMap[gameDate.getDay()];
-      const matchDay = selectedDayOfWeek === 'All' || dayStr === selectedDayOfWeek;
+      const dayNum = gameDate.getDay() === 0 ? 7 : gameDate.getDay();
+      let matchDay = true;
+      if (startDayOfWeek !== 'All' && endDayOfWeek !== 'All') {
+        const startDay = parseInt(startDayOfWeek);
+        const endDay = parseInt(endDayOfWeek);
+        matchDay = dayNum >= startDay && dayNum <= endDay;
+      } else if (startDayOfWeek !== 'All') {
+        matchDay = dayNum >= parseInt(startDayOfWeek);
+      } else if (endDayOfWeek !== 'All') {
+        matchDay = dayNum <= parseInt(endDayOfWeek);
+      }
       if (!matchDay) return false;
 
       let matchMonth = true;
@@ -817,7 +828,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
+  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, startDayOfWeek, endDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
 
   const dataForYoY = useMemo(() => {
     let filtered = rawData.filter(game => {
@@ -847,9 +858,16 @@ export default function App() {
       const matchStadium = (viewMode === 'homeTeam' || viewMode === 'matchup' || viewMode === 'cheerleaderWinRate' || viewMode === 'teamWinRate' || viewMode === 'pitcherWinRate') ? (selectedStadiumFilter === 'All' || game.Stadium === selectedStadiumFilter) : true;
       if (!matchStadium) return false;
 
-      const dayOfWeekMap = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-      const dayStr = dayOfWeekMap[new Date(game.Date).getDay()];
-      if (selectedDayOfWeek !== 'All' && dayStr !== selectedDayOfWeek) return false;
+      const dayNum = new Date(game.Date).getDay() === 0 ? 7 : new Date(game.Date).getDay();
+      if (startDayOfWeek !== 'All' && endDayOfWeek !== 'All') {
+        const startDay = parseInt(startDayOfWeek);
+        const endDay = parseInt(endDayOfWeek);
+        if (dayNum < startDay || dayNum > endDay) return false;
+      } else if (startDayOfWeek !== 'All') {
+        if (dayNum < parseInt(startDayOfWeek)) return false;
+      } else if (endDayOfWeek !== 'All') {
+        if (dayNum > parseInt(endDayOfWeek)) return false;
+      }
 
       const gameDateForMonth = new Date(game.Date);
       let matchMonth = true;
@@ -915,7 +933,7 @@ export default function App() {
     }
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
+  }, [rawData, viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, startDayOfWeek, endDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
 
   const yearlyStats = useMemo(() => {
     if (dataForYoY.length === 0) return [];
@@ -2033,22 +2051,39 @@ export default function App() {
             </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">選擇星期</label>
-            <select
-              value={selectedDayOfWeek}
-              onChange={(e) => setSelectedDayOfWeek(e.target.value)}
-              className="w-full p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="All">全部星期</option>
-              <option value="星期一">星期一</option>
-              <option value="星期二">星期二</option>
-              <option value="星期三">星期三</option>
-              <option value="星期四">星期四</option>
-              <option value="星期五">星期五</option>
-              <option value="星期六">星期六</option>
-              <option value="星期日">星期日</option>
-            </select>
+          <div className="space-y-1 sm:col-span-2">
+            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">選擇星期範圍</label>
+            <div className="flex items-center gap-2">
+              <select
+                value={startDayOfWeek}
+                onChange={(e) => setStartDayOfWeek(e.target.value)}
+                className="w-full p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="All">開始星期</option>
+                <option value="1">星期一</option>
+                <option value="2">星期二</option>
+                <option value="3">星期三</option>
+                <option value="4">星期四</option>
+                <option value="5">星期五</option>
+                <option value="6">星期六</option>
+                <option value="7">星期日</option>
+              </select>
+              <span className="text-gray-500 dark:text-gray-400">~</span>
+              <select
+                value={endDayOfWeek}
+                onChange={(e) => setEndDayOfWeek(e.target.value)}
+                className="w-full p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="All">結束星期</option>
+                <option value="1">星期一</option>
+                <option value="2">星期二</option>
+                <option value="3">星期三</option>
+                <option value="4">星期四</option>
+                <option value="5">星期五</option>
+                <option value="6">星期六</option>
+                <option value="7">星期日</option>
+              </select>
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -2283,7 +2318,9 @@ export default function App() {
                   {(startMonth !== 'All' || endMonth !== 'All') && (
                     <span>📅 {startMonth === 'All' ? '最早' : `${Number(startMonth)}月`} ~ {endMonth === 'All' ? '最新' : `${Number(endMonth)}月`}</span>
                   )}
-                  {selectedDayOfWeek !== 'All' && <span>🗓️ {selectedDayOfWeek}</span>}
+                  {(startDayOfWeek !== 'All' || endDayOfWeek !== 'All') && (
+                    <span>🗓️ {startDayOfWeek === 'All' ? '一' : ['一', '二', '三', '四', '五', '六', '日'][parseInt(startDayOfWeek) - 1]} ~ {endDayOfWeek === 'All' ? '日' : ['一', '二', '三', '四', '五', '六', '日'][parseInt(endDayOfWeek) - 1]}</span>
+                  )}
                   {selectedThemeFilter === 'ThemeOnly' && <span>⭐ 僅主題日</span>}
                   {selectedThemeFilter === 'NormalOnly' && <span>⚾ 僅無主題例行賽</span>}
                   {selectedGameType !== 'All' && <span>🏆 {selectedGameType === 'Playoff' ? '僅季後賽' : selectedGameType}</span>}
