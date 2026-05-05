@@ -48,7 +48,8 @@ export default function App() {
   const [compareSortMode, setCompareSortMode] = useState<'p2Avg' | 'growth'>((searchParams.get('csm') as 'p2Avg' | 'growth') || 'p2Avg');
   const [selectedStadiumFilter, setSelectedStadiumFilter] = useState<string>(searchParams.get('stad') || 'All');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<string>(searchParams.get('day') || 'All');
-  const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>(searchParams.get('month') || 'All');
+  const [startMonth, setStartMonth] = useState<string>(searchParams.get('sm') || 'All');
+  const [endMonth, setEndMonth] = useState<string>(searchParams.get('em') || 'All');
   const [selectedThemeFilter, setSelectedThemeFilter] = useState<string>(searchParams.get('theme') || 'All');
   const [selectedCheerleader, setSelectedCheerleader] = useState<string>(searchParams.get('cheer') || 'All');
   const [selectedGameType, setSelectedGameType] = useState<string>(searchParams.get('gtype') || 'All');
@@ -166,7 +167,8 @@ export default function App() {
     if (endYear !== 'All') params.set('ey', endYear);
     if (selectedStadiumFilter !== 'All') params.set('stad', selectedStadiumFilter);
     if (selectedDayOfWeek !== 'All') params.set('day', selectedDayOfWeek);
-    if (selectedMonthFilter !== 'All') params.set('month', selectedMonthFilter);
+    if (startMonth !== 'All') params.set('sm', startMonth);
+    if (endMonth !== 'All') params.set('em', endMonth);
     if (selectedThemeFilter !== 'All') params.set('theme', selectedThemeFilter);
     if (selectedCheerleader !== 'All') params.set('cheer', selectedCheerleader);
     if (selectedGameType !== 'All') params.set('gtype', selectedGameType);
@@ -183,7 +185,7 @@ export default function App() {
     
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
-  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType, compareMode, compareStartYear, compareEndYear, compareSortMode]);
+  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType, compareMode, compareStartYear, compareEndYear, compareSortMode]);
 
   // Default to system preference if we don't have a saved one
   useEffect(() => {
@@ -205,7 +207,8 @@ export default function App() {
     // Preserve year bounds to avoid sudden resets when flipping viewMode
     setSelectedStadiumFilter('All');
     setSelectedDayOfWeek('All');
-    setSelectedMonthFilter('All');
+    setStartMonth('All');
+    setEndMonth('All');
     setSelectedThemeFilter('All');
     setSelectedCheerleader('All');
     setSelectedGameType('All');
@@ -712,7 +715,23 @@ export default function App() {
       const matchDay = selectedDayOfWeek === 'All' || dayStr === selectedDayOfWeek;
       if (!matchDay) return false;
 
-      const matchMonth = selectedMonthFilter === 'All' || String(gameDate.getMonth() + 1).padStart(2, '0') === selectedMonthFilter;
+      let matchMonth = true;
+      const gameMonthStr = String(gameDate.getMonth() + 1).padStart(2, '0');
+      if (startMonth !== 'All' && endMonth !== 'All') {
+        const startMonthNum = parseInt(startMonth);
+        const endMonthNum = parseInt(endMonth);
+        const gameMonthNum = parseInt(gameMonthStr);
+        if (startMonthNum <= endMonthNum) {
+          matchMonth = gameMonthNum >= startMonthNum && gameMonthNum <= endMonthNum;
+        } else {
+          // Wrapped across year (e.g. 10 to 3)
+          matchMonth = gameMonthNum >= startMonthNum || gameMonthNum <= endMonthNum;
+        }
+      } else if (startMonth !== 'All') {
+        matchMonth = parseInt(gameMonthStr) >= parseInt(startMonth);
+      } else if (endMonth !== 'All') {
+        matchMonth = parseInt(gameMonthStr) <= parseInt(endMonth);
+      }
       if (!matchMonth) return false;
 
       const matchTheme = selectedThemeFilter === 'All' ? true :
@@ -796,7 +815,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
+  }, [rawData, viewMode, selectedOption, sortMode, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
 
   const dataForYoY = useMemo(() => {
     let filtered = rawData.filter(game => {
@@ -831,7 +850,22 @@ export default function App() {
       if (selectedDayOfWeek !== 'All' && dayStr !== selectedDayOfWeek) return false;
 
       const gameDateForMonth = new Date(game.Date);
-      const matchMonth = selectedMonthFilter === 'All' || String(gameDateForMonth.getMonth() + 1).padStart(2, '0') === selectedMonthFilter;
+      let matchMonth = true;
+      const gameMonthStr = String(gameDateForMonth.getMonth() + 1).padStart(2, '0');
+      if (startMonth !== 'All' && endMonth !== 'All') {
+        const startMonthNum = parseInt(startMonth);
+        const endMonthNum = parseInt(endMonth);
+        const gameMonthNum = parseInt(gameMonthStr);
+        if (startMonthNum <= endMonthNum) {
+          matchMonth = gameMonthNum >= startMonthNum && gameMonthNum <= endMonthNum;
+        } else {
+          matchMonth = gameMonthNum >= startMonthNum || gameMonthNum <= endMonthNum;
+        }
+      } else if (startMonth !== 'All') {
+        matchMonth = parseInt(gameMonthStr) >= parseInt(startMonth);
+      } else if (endMonth !== 'All') {
+        matchMonth = parseInt(gameMonthStr) <= parseInt(endMonth);
+      }
       if (!matchMonth) return false;
 
       const matchTheme = selectedThemeFilter === 'All' ? true :
@@ -879,7 +913,7 @@ export default function App() {
     }
 
     return filtered;
-  }, [rawData, viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, selectedMonthFilter, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
+  }, [rawData, viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
 
   const yearlyStats = useMemo(() => {
     if (dataForYoY.length === 0) return [];
@@ -1927,22 +1961,41 @@ export default function App() {
 
           <div className="space-y-1">
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">選擇月份</label>
-            <select
-              value={selectedMonthFilter}
-              onChange={(e) => setSelectedMonthFilter(e.target.value)}
-              className="w-full p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="All">全部月份</option>
-              <option value="03">3月</option>
-              <option value="04">4月</option>
-              <option value="05">5月</option>
-              <option value="06">6月</option>
-              <option value="07">7月</option>
-              <option value="08">8月</option>
-              <option value="09">9月</option>
-              <option value="10">10月</option>
-              <option value="11">11月</option>
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                value={startMonth}
+                onChange={(e) => setStartMonth(e.target.value)}
+                className="flex-1 min-w-0 p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none truncate"
+              >
+                <option value="All">最早</option>
+                <option value="03">3月</option>
+                <option value="04">4月</option>
+                <option value="05">5月</option>
+                <option value="06">6月</option>
+                <option value="07">7月</option>
+                <option value="08">8月</option>
+                <option value="09">9月</option>
+                <option value="10">10月</option>
+                <option value="11">11月</option>
+              </select>
+              <span className="text-gray-400 font-medium shrink-0">~</span>
+              <select
+                value={endMonth}
+                onChange={(e) => setEndMonth(e.target.value)}
+                className="flex-1 min-w-0 p-2.5 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 dark:text-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none truncate"
+              >
+                <option value="All">最新</option>
+                <option value="03">3月</option>
+                <option value="04">4月</option>
+                <option value="05">5月</option>
+                <option value="06">6月</option>
+                <option value="07">7月</option>
+                <option value="08">8月</option>
+                <option value="09">9月</option>
+                <option value="10">10月</option>
+                <option value="11">11月</option>
+              </select>
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -2192,7 +2245,9 @@ export default function App() {
                     )}
                   </div>
                   {selectedStadiumFilter !== 'All' && <span>📍 {selectedStadiumFilter}</span>}
-                  {selectedMonthFilter !== 'All' && <span>📅 {Number(selectedMonthFilter)}月</span>}
+                  {(startMonth !== 'All' || endMonth !== 'All') && (
+                    <span>📅 {startMonth === 'All' ? '最早' : `${Number(startMonth)}月`} ~ {endMonth === 'All' ? '最新' : `${Number(endMonth)}月`}</span>
+                  )}
                   {selectedDayOfWeek !== 'All' && <span>🗓️ {selectedDayOfWeek}</span>}
                   {selectedThemeFilter === 'ThemeOnly' && <span>⭐ 僅主題日</span>}
                   {selectedThemeFilter === 'NormalOnly' && <span>⚾ 僅無主題例行賽</span>}
