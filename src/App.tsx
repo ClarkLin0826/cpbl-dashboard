@@ -58,6 +58,7 @@ export default function App() {
   const [selectedGameLimit, setSelectedGameLimit] = useState<string>(searchParams.get('limit') || '');
   const [showNextWeek, setShowNextWeek] = useState(searchParams.get('nw') === 'true');
   const [sortMode, setSortMode] = useState<SortMode>((searchParams.get('sort') as SortMode) || 'date');
+  const [pitcherSortMode, setPitcherSortMode] = useState<'winRate' | 'games' | 'avgAudience'>((searchParams.get('psm') as 'winRate' | 'games' | 'avgAudience') || 'winRate');
   const [teamWinRateChartType, setTeamWinRateChartType] = useState<'table' | 'monthlyLine'>((searchParams.get('twrct') as 'table' | 'monthlyLine') || 'table');
   
   const [selectedGame, setSelectedGame] = useState<GameData | null>(null);
@@ -178,6 +179,7 @@ export default function App() {
     if (selectedGameLimit !== '') params.set('limit', selectedGameLimit);
     if (showNextWeek) params.set('nw', 'true');
     if (sortMode !== 'date') params.set('sort', sortMode);
+    if (pitcherSortMode !== 'winRate') params.set('psm', pitcherSortMode);
     if (teamWinRateChartType !== 'table') params.set('twrct', teamWinRateChartType);
     if (compareMode) {
       params.set('comp', 'true');
@@ -189,7 +191,7 @@ export default function App() {
     
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
-  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, startDayOfWeek, endDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType, compareMode, compareStartYear, compareEndYear, compareSortMode, showTotalStats]);
+  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, startDayOfWeek, endDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType, compareMode, compareStartYear, compareEndYear, compareSortMode, showTotalStats, pitcherSortMode]);
 
   // Default to system preference if we don't have a saved one
   useEffect(() => {
@@ -1208,8 +1210,15 @@ export default function App() {
         rate: (stat.wins + stat.losses) > 0 ? (stat.wins / (stat.wins + stat.losses)) : 0,
         avgAudience: stat.games > 0 ? Math.round(stat.audienceSum / stat.games) : 0
       }))
-      .sort((a, b) => b.rate === a.rate ? b.games - a.games : b.rate - a.rate);
-  }, [chartData, viewMode, winRateMode, selectedOption]);
+      .sort((a, b) => {
+        if (pitcherSortMode === 'games') {
+          return b.games === a.games ? b.rate - a.rate : b.games - a.games;
+        } else if (pitcherSortMode === 'avgAudience') {
+           return b.avgAudience === a.avgAudience ? b.rate - a.rate : b.avgAudience - a.avgAudience;
+        }
+        return b.rate === a.rate ? b.games - a.games : b.rate - a.rate;
+      });
+  }, [chartData, viewMode, winRateMode, selectedOption, pitcherSortMode]);
 
   const monthlyWinRateStats = useMemo(() => {
     if (viewMode !== 'teamWinRate' || teamWinRateChartType !== 'monthlyLine') return null;
@@ -2867,10 +2876,30 @@ export default function App() {
                         <th className="py-3 px-2 font-bold border-b border-gray-200 dark:border-slate-700 w-16 whitespace-nowrap">排名</th>
                         <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 text-left sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 whitespace-nowrap shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">投手</th>
                         {selectedOption === 'All' && <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 whitespace-nowrap">球隊</th>}
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">出賽</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">勝-敗-和</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">勝率</th>
-                        <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">場均人數</th>
+                        <th 
+                          className={`py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors ${pitcherSortMode === 'games' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-300'}`}
+                          onClick={() => setPitcherSortMode('games')}
+                        >
+                          出賽 {pitcherSortMode === 'games' && '↓'}
+                        </th>
+                        <th 
+                          className={`py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors ${pitcherSortMode === 'winRate' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-300'}`}
+                          onClick={() => setPitcherSortMode('winRate')}
+                        >
+                          勝-敗-和 {pitcherSortMode === 'winRate' && '↓'}
+                        </th>
+                        <th 
+                          className={`py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors ${pitcherSortMode === 'winRate' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-300'}`}
+                          onClick={() => setPitcherSortMode('winRate')}
+                        >
+                          勝率 {pitcherSortMode === 'winRate' && '↓'}
+                        </th>
+                        <th 
+                          className={`py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors ${pitcherSortMode === 'avgAudience' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-300'}`}
+                          onClick={() => setPitcherSortMode('avgAudience')}
+                        >
+                          場均人數 {pitcherSortMode === 'avgAudience' && '↓'}
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 bg-white dark:bg-slate-800">
