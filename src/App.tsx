@@ -45,7 +45,8 @@ export default function App() {
   const [compareMode, setCompareMode] = useState<boolean>(searchParams.get('comp') === 'true');
   const [compareStartYear, setCompareStartYear] = useState<string>(searchParams.get('csy') || 'All');
   const [compareEndYear, setCompareEndYear] = useState<string>(searchParams.get('cey') || 'All');
-  const [compareSortMode, setCompareSortMode] = useState<'p2Avg' | 'growth'>((searchParams.get('csm') as 'p2Avg' | 'growth') || 'p2Avg');
+  const [compareSortMode, setCompareSortMode] = useState<'p2Avg' | 'growth' | 'totalGrowth'>((searchParams.get('csm') as 'p2Avg' | 'growth' | 'totalGrowth') || 'p2Avg');
+  const [showTotalStats, setShowTotalStats] = useState<boolean>(searchParams.get('sts') === 'true');
   const [selectedStadiumFilter, setSelectedStadiumFilter] = useState<string>(searchParams.get('stad') || 'All');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<string>(searchParams.get('day') || 'All');
   const [startMonth, setStartMonth] = useState<string>(searchParams.get('sm') || 'All');
@@ -180,12 +181,13 @@ export default function App() {
       params.set('comp', 'true');
       if (compareSortMode !== 'p2Avg') params.set('csm', compareSortMode);
     }
+    if (showTotalStats === true) params.set('sts', 'true');
     if (compareStartYear !== 'All') params.set('csy', compareStartYear);
     if (compareEndYear !== 'All') params.set('cey', compareEndYear);
     
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
-  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType, compareMode, compareStartYear, compareEndYear, compareSortMode]);
+  }, [viewMode, winRateMode, selectedOption, startYear, endYear, selectedStadiumFilter, selectedDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, sortMode, isFirstLoad, teamWinRateChartType, compareMode, compareStartYear, compareEndYear, compareSortMode, showTotalStats]);
 
   // Default to system preference if we don't have a saved one
   useEffect(() => {
@@ -1027,7 +1029,7 @@ export default function App() {
   }, [chartData, viewMode, winRateMode, selectedOption]);
 
   const categoryRankingStats = useMemo(() => {
-    if (!((viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All')) return { base: [], comparison: [] };
+    if (!((viewMode === 'stadium' || viewMode === 'homeTeam') && selectedOption === 'All')) return { base: [], comparison: [], totalsBase: null, totalsComparison: null };
     
     // Helper to calc stats for a given dataset
     const calcStats = (data: GameData[]) => {
@@ -1053,7 +1055,12 @@ export default function App() {
           avgAudience: stat.games > 0 ? Math.round(stat.audienceSum / stat.games) : 0
         }))
         .sort((a, b) => b.avgAudience - a.avgAudience);
-      return { base, comparison: [] };
+        
+      const totalGames = Object.values(stats).reduce((sum, s) => sum + s.games, 0);
+      const totalAudience = Object.values(stats).reduce((sum, s) => sum + s.audienceSum, 0);
+      const totalsBase = { games: totalGames, totalAudience, avgAudience: totalGames > 0 ? Math.round(totalAudience / totalGames) : 0 };
+
+      return { base, comparison: [], totalsBase, totalsComparison: null };
     } else {
       // Filter dataForYoY for period 1
       const p1Data = dataForYoY.filter(game => {
@@ -1084,13 +1091,17 @@ export default function App() {
         const avg1 = s1.games > 0 ? Math.round(s1.audienceSum / s1.games) : 0;
         const avg2 = s2.games > 0 ? Math.round(s2.audienceSum / s2.games) : 0;
         const growth = avg1 > 0 ? ((avg2 - avg1) / avg1 * 100) : null;
+        const totalGrowth = s1.audienceSum > 0 ? ((s2.audienceSum - s1.audienceSum) / s1.audienceSum * 100) : null;
         return {
           category,
           p1Games: s1.games,
+          p1Sum: s1.audienceSum,
           p1Avg: avg1,
           p2Games: s2.games,
+          p2Sum: s2.audienceSum,
           p2Avg: avg2,
-          growth
+          growth,
+          totalGrowth
         };
       }).sort((a, b) => {
         if (compareSortMode === 'growth') {
@@ -1099,11 +1110,35 @@ export default function App() {
           if (a.growth === null) return 1;
           if (b.growth === null) return -1;
           return b.growth - a.growth;
+        } else if (compareSortMode === 'totalGrowth') {
+          if (a.totalGrowth === null && b.totalGrowth === null) return b.p2Sum - a.p2Sum;
+          if (a.totalGrowth === null) return 1;
+          if (b.totalGrowth === null) return -1;
+          return b.totalGrowth - a.totalGrowth;
         }
         return b.p2Avg - a.p2Avg;
       });
 
-      return { base: [], comparison };
+      const p1TotalGames = comparison.reduce((sum, s) => sum + s.p1Games, 0);
+      const p1TotalSum = comparison.reduce((sum, s) => sum + s.p1Sum, 0);
+      const p1TotalAvg = p1TotalGames > 0 ? Math.round(p1TotalSum / p1TotalGames) : 0;
+      
+      const p2TotalGames = comparison.reduce((sum, s) => sum + s.p2Games, 0);
+      const p2TotalSum = comparison.reduce((sum, s) => sum + s.p2Sum, 0);
+      const p2TotalAvg = p2TotalGames > 0 ? Math.round(p2TotalSum / p2TotalGames) : 0;
+      
+      const totalsComparison = {
+        p1Games: p1TotalGames,
+        p1Sum: p1TotalSum,
+        p1Avg: p1TotalAvg,
+        p2Games: p2TotalGames,
+        p2Sum: p2TotalSum,
+        p2Avg: p2TotalAvg,
+        growth: p1TotalAvg > 0 ? ((p2TotalAvg - p1TotalAvg) / p1TotalAvg * 100) : null,
+        totalGrowth: p1TotalSum > 0 ? ((p2TotalSum - p1TotalSum) / p1TotalSum * 100) : null
+      };
+
+      return { base: [], comparison, totalsBase: null, totalsComparison };
     }
   }, [chartData, dataForYoY, viewMode, selectedOption, compareMode, startYear, endYear, compareStartYear, compareEndYear, compareSortMode]);
 
@@ -2567,6 +2602,24 @@ export default function App() {
               <div className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
                 {"計算方式為指定年份區間內各" + (viewMode === 'stadium' ? '球場' : '主隊') + "的總人數及場均人數。"}
               </div>
+              
+              <div className="flex justify-center mb-6">
+                <label className="flex items-center cursor-pointer select-none">
+                  <div className="relative">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only" 
+                      checked={showTotalStats} 
+                      onChange={() => setShowTotalStats(!showTotalStats)} 
+                    />
+                    <div className={`block w-10 h-6 rounded-full transition-colors ${showTotalStats ? 'bg-blue-500' : 'bg-gray-300 dark:bg-slate-600'}`}></div>
+                    <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${showTotalStats ? 'transform translate-x-4' : ''}`}></div>
+                  </div>
+                  <div className="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    顯示總數相關數據
+                  </div>
+                </label>
+              </div>
 
               {categoryRankingStats.base.length === 0 && categoryRankingStats.comparison.length === 0 ? (
                 <div className="text-center text-gray-400 py-10">目前沒有符合條件的資料。</div>
@@ -2580,11 +2633,19 @@ export default function App() {
                         {!compareMode ? (
                           <>
                             <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap">比賽場次</th>
-                            <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">總人數</th>
+                            {showTotalStats && (
+                              <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">總人數</th>
+                            )}
                             <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-32 whitespace-nowrap">場均人數</th>
                           </>
                         ) : (
                           <>
+                            {showTotalStats && (
+                              <>
+                                <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap text-gray-500">基準總數</th>
+                                <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap text-gray-500">比較總數</th>
+                              </>
+                            )}
                             <th className="py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap text-gray-500">基準場均</th>
                             <th 
                               className={`py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors ${compareSortMode === 'p2Avg' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
@@ -2593,12 +2654,21 @@ export default function App() {
                             >
                                比較場均 {compareSortMode === 'p2Avg' && '↓'}
                             </th>
+                            {showTotalStats && (
+                              <th 
+                                className={`py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors ${compareSortMode === 'totalGrowth' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
+                                onClick={() => setCompareSortMode('totalGrowth')}
+                                title="按總數成長率排序"
+                              >
+                                 總數成長率 {compareSortMode === 'totalGrowth' && '↓'}
+                              </th>                             
+                            )}
                             <th 
                               className={`py-3 px-4 font-bold border-b border-gray-200 dark:border-slate-700 w-24 whitespace-nowrap cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors ${compareSortMode === 'growth' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}
                               onClick={() => setCompareSortMode('growth')}
-                              title="按成長率排序"
+                              title="按場均成長率排序"
                             >
-                               成長率 {compareSortMode === 'growth' && '↓'}
+                               場均成長率 {compareSortMode === 'growth' && '↓'}
                             </th>
                           </>
                         )}
@@ -2611,7 +2681,9 @@ export default function App() {
                             <td className="py-3 px-2 font-bold text-gray-400 dark:text-gray-500 whitespace-nowrap">#{idx + 1}</td>
                             <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 text-left sticky left-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-blue-50/50 dark:group-hover:bg-slate-700/30 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)] whitespace-nowrap">{stat.category}</td>
                             <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.games}</td>
-                            <td className="py-3 px-4 text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">{stat.totalAudience.toLocaleString()}</td>
+                            {showTotalStats && (
+                              <td className="py-3 px-4 text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">{stat.totalAudience.toLocaleString()}</td>
+                            )}
                             <td className="py-3 px-4 text-slate-800 dark:text-slate-200 font-semibold whitespace-nowrap">{stat.avgAudience.toLocaleString()}</td>
                           </tr>
                         ))
@@ -2623,8 +2695,33 @@ export default function App() {
                               {stat.category}
                               <div className="text-[10px] font-normal text-gray-400 mt-0.5">({stat.p1Games}場 vs {stat.p2Games}場)</div>
                             </td>
+                            {showTotalStats && (
+                              <>
+                                <td className="py-3 px-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{stat.p1Sum > 0 ? stat.p1Sum.toLocaleString() : '-'}</td>
+                                <td className="py-3 px-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{stat.p2Sum > 0 ? stat.p2Sum.toLocaleString() : '-'}</td>
+                              </>
+                            )}
                             <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">{stat.p1Avg > 0 ? stat.p1Avg.toLocaleString() : '-'}</td>
                             <td className="py-3 px-4 text-slate-800 dark:text-slate-200 font-semibold whitespace-nowrap">{stat.p2Avg > 0 ? stat.p2Avg.toLocaleString() : '-'}</td>
+                            {showTotalStats && (
+                              <td className="py-3 px-4 font-medium whitespace-nowrap">
+                                {stat.totalGrowth !== null ? (
+                                   stat.totalGrowth > 0 ? (
+                                      <span className="text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
+                                        <TrendingUp className="w-3.5 h-3.5" /> +{stat.totalGrowth.toFixed(1)}%
+                                      </span>
+                                   ) : stat.totalGrowth < 0 ? (
+                                      <span className="text-red-500 dark:text-red-400 flex items-center justify-center gap-1">
+                                        <TrendingDown className="w-3.5 h-3.5" /> {stat.totalGrowth.toFixed(1)}%
+                                      </span>
+                                   ) : (
+                                      <span className="text-slate-500 dark:text-slate-400">-</span>
+                                   )
+                                ) : (
+                                  <span className="text-slate-400 text-xs text-center border-b border-dotted border-slate-300 pb-0.5 cursor-help" title="無法計算（可能有區間未比賽）">N/A</span>
+                                )}
+                              </td>                           
+                            )}
                             <td className="py-3 px-4 font-medium whitespace-nowrap">
                               {stat.growth !== null ? (
                                  stat.growth > 0 ? (
@@ -2646,6 +2743,70 @@ export default function App() {
                         ))
                       )}
                     </tbody>
+                    <tfoot className="bg-slate-50 dark:bg-slate-800/80 border-t-2 border-gray-200 dark:border-slate-700 font-bold text-slate-700 dark:text-slate-300">
+                      {!compareMode && categoryRankingStats.totalsBase && (
+                        <tr>
+                          <td colSpan={2} className="py-3 px-4 text-right sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">總和</td>
+                          <td className="py-3 px-4 whitespace-nowrap">{categoryRankingStats.totalsBase.games}</td>
+                          {showTotalStats && (
+                            <td className="py-3 px-4 whitespace-nowrap">{categoryRankingStats.totalsBase.totalAudience.toLocaleString()}</td>
+                          )}
+                          <td className="py-3 px-4 text-blue-600 dark:text-blue-400 whitespace-nowrap">{categoryRankingStats.totalsBase.avgAudience.toLocaleString()}</td>
+                        </tr>
+                      )}
+                      {compareMode && categoryRankingStats.totalsComparison && (
+                        <tr>
+                          <td colSpan={2} className="py-3 px-4 text-right sticky left-0 z-10 bg-slate-50 dark:bg-slate-800/80 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)]">
+                            總和
+                            <div className="text-[10px] font-normal text-gray-400 mt-0.5">({categoryRankingStats.totalsComparison.p1Games}場 vs {categoryRankingStats.totalsComparison.p2Games}場)</div>
+                          </td>
+                          {showTotalStats && (
+                            <>
+                              <td className="py-3 px-4 whitespace-nowrap text-left text-slate-800 dark:text-slate-200">{categoryRankingStats.totalsComparison.p1Sum > 0 ? categoryRankingStats.totalsComparison.p1Sum.toLocaleString() : '-'}</td>
+                              <td className="py-3 px-4 whitespace-nowrap text-left text-slate-800 dark:text-slate-200">{categoryRankingStats.totalsComparison.p2Sum > 0 ? categoryRankingStats.totalsComparison.p2Sum.toLocaleString() : '-'}</td>
+                            </>
+                          )}
+                          <td className="py-3 px-4 whitespace-nowrap text-left text-slate-800 dark:text-slate-200">{categoryRankingStats.totalsComparison.p1Avg > 0 ? categoryRankingStats.totalsComparison.p1Avg.toLocaleString() : '-'}</td>
+                          <td className="py-3 px-4 text-blue-600 dark:text-blue-400 whitespace-nowrap text-left">{categoryRankingStats.totalsComparison.p2Avg > 0 ? categoryRankingStats.totalsComparison.p2Avg.toLocaleString() : '-'}</td>
+                          {showTotalStats && (
+                            <td className="py-3 px-4 whitespace-nowrap text-left">
+                              {categoryRankingStats.totalsComparison.totalGrowth !== null ? (
+                                 categoryRankingStats.totalsComparison.totalGrowth > 0 ? (
+                                    <span className="text-emerald-600 dark:text-emerald-400 flex items-center justify-start gap-1">
+                                      <TrendingUp className="w-3.5 h-3.5" /> +{categoryRankingStats.totalsComparison.totalGrowth.toFixed(1)}%
+                                    </span>
+                                 ) : categoryRankingStats.totalsComparison.totalGrowth < 0 ? (
+                                    <span className="text-red-500 dark:text-red-400 flex items-center justify-start gap-1">
+                                      <TrendingDown className="w-3.5 h-3.5" /> {categoryRankingStats.totalsComparison.totalGrowth.toFixed(1)}%
+                                    </span>
+                                 ) : (
+                                    <span className="text-slate-500 dark:text-slate-400 flex items-center justify-start">-</span>
+                                 )
+                              ) : (
+                                <span className="text-slate-400 text-xs text-center border-b border-dotted border-slate-300 pb-0.5 cursor-help" title="無法計算">N/A</span>
+                              )}
+                            </td>
+                          )}
+                          <td className="py-3 px-4 whitespace-nowrap text-left">
+                            {categoryRankingStats.totalsComparison.growth !== null ? (
+                               categoryRankingStats.totalsComparison.growth > 0 ? (
+                                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center justify-start gap-1">
+                                    <TrendingUp className="w-3.5 h-3.5" /> +{categoryRankingStats.totalsComparison.growth.toFixed(1)}%
+                                  </span>
+                               ) : categoryRankingStats.totalsComparison.growth < 0 ? (
+                                  <span className="text-red-500 dark:text-red-400 flex items-center justify-start gap-1">
+                                    <TrendingDown className="w-3.5 h-3.5" /> {categoryRankingStats.totalsComparison.growth.toFixed(1)}%
+                                  </span>
+                               ) : (
+                                  <span className="text-slate-500 dark:text-slate-400 flex items-center justify-start">-</span>
+                               )
+                            ) : (
+                              <span className="text-slate-400 text-xs text-center border-b border-dotted border-slate-300 pb-0.5 cursor-help" title="無法計算">N/A</span>
+                            )}
+                          </td>                          
+                        </tr>
+                      )}
+                    </tfoot>
                   </table>
                 </div>
               )}
