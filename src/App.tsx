@@ -690,8 +690,6 @@ export default function App() {
         if (startYear !== 'All' && itemYear < startYear) matchYear = false;
         if (endYear !== 'All' && itemYear > endYear) matchYear = false;
         if (!matchYear) return false;
-        
-        if (game.Audience === 0) return false;
       }
       
       if (viewMode !== 'matchup') {
@@ -763,9 +761,6 @@ export default function App() {
                             game.GameType === selectedGameType;
       if (!matchGameType) return false;
 
-      // Filter out games with 0 audience (assuming unplayed games) only in normal mode
-      if (!showNextWeek && game.Audience === 0) return false;
-
       return true;
     });
 
@@ -793,6 +788,12 @@ export default function App() {
         });
       }
     }
+
+    // After applying the limit on scheduled games, filter out those that happened to be unplayed/rain delays
+    filtered = filtered.filter(game => {
+      if (!showNextWeek && game.Audience === 0) return false;
+      return true;
+    });
 
     filtered = [...filtered].sort((a, b) => {
       switch (sortMode) {
@@ -904,8 +905,6 @@ export default function App() {
                             game.GameType === selectedGameType;
       if (!matchGameType) return false;
 
-      if (game.Audience === 0) return false;
-
       return true;
     });
 
@@ -933,6 +932,11 @@ export default function App() {
         });
       }
     }
+
+    filtered = filtered.filter(game => {
+      if (game.Audience === 0) return false;
+      return true;
+    });
 
     return filtered;
   }, [rawData, viewMode, selectedOption, startYear, endYear, selectedStadiumFilter, startDayOfWeek, endDayOfWeek, startMonth, endMonth, selectedThemeFilter, selectedCheerleader, selectedGameType, selectedGameLimit, showNextWeek, winRateMode]);
